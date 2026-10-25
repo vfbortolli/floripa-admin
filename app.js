@@ -398,41 +398,52 @@ function barLabel(r) {
 
 function renderGantt() {
   const y = agMonth.getFullYear(), m = agMonth.getMonth();
-  const days = new Date(y, m + 1, 0).getDate();
-  const next = new Date(y, m + 1, 1);
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m + 1, 0);
   const today = fmtDate(new Date());
   const el = $("gantt");
   el.innerHTML = "";
-  el.style.setProperty("--days", days);
-  const put = (node, col, row) => { node.style.gridColumn = col; node.style.gridRow = row; el.append(node); return node; };
   const div = (cls, text) => { const d = document.createElement("div"); d.className = cls; if (text != null) d.textContent = text; return d; };
+  const room = spaces.find((s) => s.id === agRoom);
+  if (!room) return;
+  const list = monthRes.filter((x) => x.space_id === room.id);
 
-  put(div("g-head g-room"), 1, 1);
-  for (let d = 1; d <= days; d++) {
-    const dow = new Date(y, m, d).toLocaleDateString("pt-BR", { weekday: "narrow" });
-    put(div("g-head", `${d}\n${dow}`), `${2 * d} / span 2`, 1);
-  }
-  reservableRooms().filter((r) => r.id === agRoom).forEach((room, i) => {
-    const row = i + 2;
-    put(div("g-room", room.name), 1, row);
-    for (let d = 1; d <= days; d++) {
-      const date = new Date(y, m, d);
-      const cell = div("g-cell" + ([0, 6].includes(date.getDay()) ? " we" : "") + (fmtDate(date) === today ? " today" : ""));
+  const head = div("cal-head");
+  for (const n of ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]) head.append(div("", n));
+  el.append(head);
+
+  const start = new Date(y, m, 1 - first.getDay());
+  for (let ws = new Date(start); ws <= last; ws.setDate(ws.getDate() + 7)) {
+    const week = div("cal-week");
+    const wsDate = new Date(ws);
+    for (let k = 0; k < 7; k++) {
+      const date = new Date(wsDate.getFullYear(), wsDate.getMonth(), wsDate.getDate() + k);
+      const out = date.getMonth() !== m;
+      const cell = div("cal-day" + (out ? " out" : "") + (fmtDate(date) === today ? " today" : ""));
+      cell.append(div("num", date.getDate()));
       cell.title = `${room.name} – ${date.toLocaleDateString("pt-BR")}`;
-      cell.onclick = () => openReservation(null, { space_id: room.id, check_in: fmtDate(date) });
-      put(cell, `${2 * d} / span 2`, row);
+      if (!out) cell.onclick = () => openReservation(null, { space_id: room.id, check_in: fmtDate(date) });
+      cell.style.gridColumn = `${2 * k + 1} / span 2`;
+      cell.style.gridRow = "1 / span 2";
+      week.append(cell);
     }
-    for (const r of monthRes.filter((x) => x.space_id === room.id)) {
-      // a barra vai do meio do dia de entrada ao meio do dia de saída
+    const weekEnd = new Date(wsDate.getFullYear(), wsDate.getMonth(), wsDate.getDate() + 7);
+    for (const r of list) {
       const inD = parseDate(r.check_in), outD = parseDate(r.check_out);
-      const s = inD < new Date(y, m, 1) ? 2 : 2 * inD.getDate() + 1;
-      const e = outD >= next ? 2 * days + 2 : 2 * outD.getDate() + 1;
-      const bar = div("bar" + (r.kind === "block" ? " block" : "") + (r.created_by === me.email ? " mine" : ""), barLabel(r));
+      if (inD >= weekEnd || outD < wsDate) continue;
+      // a barra vai do meio do dia de entrada ao meio do dia de saída
+      const s = inD < wsDate ? 1 : 2 * nightsBetween(fmtDate(wsDate), r.check_in) + 2;
+      const e = outD >= weekEnd ? 15 : 2 * nightsBetween(fmtDate(wsDate), r.check_out) + 2;
+      if (e <= s) continue;
+      const bar = div("bar" + (r.kind === "block" ? " block" : "") + (r.created_by === me.email ? " mine" : "") + (inD < wsDate ? " cont-l" : "") + (outD >= weekEnd ? " cont-r" : ""), barLabel(r));
       bar.title = `${barLabel(r)} (${brDate(r.check_in)} → ${brDate(r.check_out)})`;
-      bar.onclick = () => openReservation(r);
-      put(bar, `${s} / ${e}`, row);
+      bar.onclick = (ev) => { ev.stopPropagation(); openReservation(r); };
+      bar.style.gridColumn = `${s} / ${e}`;
+      bar.style.gridRow = "2";
+      week.append(bar);
     }
-  });
+    el.append(week);
+  }
 }
 
 function reservationTotal(r) {
