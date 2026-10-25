@@ -77,19 +77,32 @@ async function loadItems() {
   const edit = canEdit(space);
   const tbody = $("items");
   tbody.innerHTML = "";
+  $("item-count").textContent = `${data.length} ${data.length === 1 ? "item" : "itens"}`;
+  if (!data.length) {
+    const tr = document.createElement("tr");
+    const c = td("Nenhum item cadastrado neste espaço.", "empty");
+    c.colSpan = 5;
+    tr.append(c);
+    tbody.append(tr);
+  }
   for (const it of data) tbody.append(edit ? editableRow(it) : readonlyRow(it));
 }
 
-function td(content, cls) {
+function td(content, cls, label) {
   const c = document.createElement("td");
   if (cls) c.className = cls;
+  if (label) c.dataset.label = label;
   if (content instanceof Node) c.append(content); else c.textContent = content ?? "";
   return c;
 }
 
 function readonlyRow(it) {
   const tr = document.createElement("tr");
-  tr.append(td(it.description), td(it.quantity, "num"), td(CONDITIONS[it.condition]), td(it.notes), td(""));
+  const tag = document.createElement("span");
+  tag.className = `tag ${it.condition}`;
+  tag.textContent = CONDITIONS[it.condition];
+  tr.append(td(it.description, "ro", "Descrição"), td(it.quantity, "num ro", "Qtd"),
+    td(tag, "ro", "Estado"), td(it.notes, "ro", "Observações"), td(""));
   return tr;
 }
 
@@ -102,6 +115,8 @@ function editableRow(it) {
   const text = (value, field, type = "text") => {
     const i = document.createElement("input");
     i.type = type; i.value = value ?? "";
+    if (field === "notes") i.placeholder = "Observações";
+    if (field === "quantity") i.placeholder = "Qtd";
     if (type === "number") i.min = 0;
     i.onchange = () => {
       let v = i.value.trim();
@@ -117,7 +132,8 @@ function editableRow(it) {
     const o = new Option(label, k, false, k === it.condition);
     sel.append(o);
   }
-  sel.onchange = () => save({ condition: sel.value });
+  sel.className = `cond-${it.condition}`;
+  sel.onchange = () => { sel.className = `cond-${sel.value}`; save({ condition: sel.value }); };
   const del = document.createElement("button");
   del.className = "danger"; del.textContent = "✕"; del.title = "Excluir";
   del.onclick = async () => {
@@ -125,8 +141,9 @@ function editableRow(it) {
     const { error } = await db.from("items").delete().eq("id", it.id);
     if (error) say("app-msg", error.message); else loadItems();
   };
-  tr.append(td(text(it.description, "description")), td(text(it.quantity, "quantity", "number"), "num"),
-    td(sel), td(text(it.notes, "notes")), td(del));
+  tr.append(td(text(it.description, "description"), "", "Descrição"),
+    td(text(it.quantity, "quantity", "number"), "num", "Qtd"),
+    td(sel, "", "Estado"), td(text(it.notes, "notes"), "", "Observações"), td(del));
   return tr;
 }
 
