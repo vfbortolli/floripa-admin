@@ -1,0 +1,35 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #1d2733; }
+.hidden { display: none !important; }
+.card { max-width: 360px; margin: 10vh auto; background: #fff; padding: 24px; border-radius: 10px; box-shadow: 0 2px 10px #0002; text-align: center; }
+.card input { width: 100%; margin-bottom: 8px; }
+.sep { margin: 12px 0; color: #888; }
+button, .btn { background: #0b6bcb; color: #fff; border: 0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; display: inline-block; }
+button.link { background: none; color: #0b6bcb; padding: 0 4px; }
+button.danger { background: #c62828; padding: 4px 8px; }
+input, select { padding: 7px; border: 1px solid #c3ccd6; border-radius: 6px; font-size: 14px; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: #0b3d6b; color: #fff; }
+header h1 { font-size: 18px; margin: 0; }
+header .link { color: #9cd0ff; }
+.layout { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+nav { min-width: 190px; background: #fff; border-radius: 8px; padding: 8px; }
+nav h3 { font-size: 12px; text-transform: uppercase; color: #667; margin: 10px 6px 4px; }
+nav button { display: block; width: 100%; text-align: left; background: none; color: #1d2733; padding: 6px 8px; }
+nav button.active { background: #dcecff; font-weight: 600; }
+main { flex: 1; background: #fff; border-radius: 8px; padding: 16px; overflow-x: auto; }
+.toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.toolbar h2 { margin: 0; }
+.badge { background: #eee; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+th, td { padding: 6px; border-bottom: 1px solid #e5e9ee; text-align: left; }
+td input, td select { width: 100%; }
+.num { width: 80px; text-align: right; }
+td.num input { text-align: right; }
+.add { display: flex; gap: 8px; margin-top: 12px; }
+.add input:first-child { flex: 1; }
+.add input[type=number] { width: 90px; }
+.msg { color: #555; min-height: 1.2em; }
+@media (max-width: 700px) {
+  .layout { flex-direction: column; }
+  nav { width: 100%; }
+}

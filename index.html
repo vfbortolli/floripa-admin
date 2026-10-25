@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Casa de Praia – Inventário</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <section id="login" class="card hidden">
+    <h1>Casa de Praia</h1>
+    <p>Entre para ver o inventário.</p>
+    <button id="btn-google">Entrar com Google</button>
+    <div class="sep">ou</div>
+    <form id="form-magic">
+      <input type="email" id="magic-email" placeholder="seu e-mail" required>
+      <button type="submit">Receber link por e-mail</button>
+    </form>
+    <p id="login-msg" class="msg"></p>
+  </section>
+
+  <section id="denied" class="card hidden">
+    <h1>Acesso não autorizado</h1>
+    <p>O e-mail <b id="denied-email"></b> não está na lista. Peça a um administrador para cadastrá-lo.</p>
+    <button id="btn-logout-denied">Sair</button>
+  </section>
+
+  <div id="app" class="hidden">
+    <header>
+      <h1>Inventário</h1>
+      <span><span id="who"></span> <button id="btn-logout" class="link">Sair</button></span>
+    </header>
+    <div class="layout">
+      <nav id="spaces"></nav>
+      <main>
+        <div class="toolbar">
+          <h2 id="space-title"></h2>
+          <span id="readonly-badge" class="badge hidden">somente leitura</span>
+          <span id="edit-tools" class="hidden">
+            <label class="btn">Importar CSV <input type="file" id="csv-file" accept=".csv,text/csv" hidden></label>
+          </span>
+        </div>
+        <table>
+          <thead><tr><th>Descrição</th><th class="num">Qtd</th><th>Estado</th><th>Observações</th><th></th></tr></thead>
+          <tbody id="items"></tbody>
+        </table>
+        <form id="form-add" class="add hidden">
+          <input id="add-desc" placeholder="Novo item" required>
+          <input id="add-qty" type="number" min="0" placeholder="Qtd">
+          <button type="submit">Adicionar</button>
+        </form>
+        <p id="app-msg" class="msg"></p>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
