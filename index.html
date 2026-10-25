@@ -51,6 +51,31 @@
         </form>
         <p id="people-msg" class="msg"></p>
       </main>
+      <main id="agenda" class="hidden">
+        <div class="toolbar">
+          <h2>Agenda</h2>
+          <span class="month-nav">
+            <button id="ag-prev" class="secondary" aria-label="Mês anterior">‹</button>
+            <b id="ag-label"></b>
+            <button id="ag-next" class="secondary" aria-label="Próximo mês">›</button>
+          </span>
+          <button id="ag-new" class="push">Nova reserva</button>
+        </div>
+        <div id="gantt" class="gantt"></div>
+        <h3 class="sub">Reservas do mês</h3>
+        <div id="res-list"></div>
+        <p id="agenda-msg" class="msg"></p>
+      </main>
+      <main id="rates" class="hidden">
+        <div class="toolbar"><h2>Valores</h2></div>
+        <p class="msg">Valor por pessoa por noite. Reservas já criadas mantêm o valor de quando foram feitas.</p>
+        <form id="form-rates" class="add person-form">
+          <label class="check">Sócio R$ <input id="r-socio" type="number" min="0" step="0.01" required></label>
+          <label class="check">Convidado R$ <input id="r-convidado" type="number" min="0" step="0.01" required></label>
+          <button type="submit">Salvar</button>
+        </form>
+        <p id="rates-msg" class="msg"></p>
+      </main>
       <main id="inventory">
         <div class="toolbar">
           <h2 id="space-title"></h2>
@@ -73,6 +98,42 @@
       </main>
     </div>
   </div>
+
+  <dialog id="res-dialog">
+    <form id="res-form">
+      <h2 id="res-title">Nova reserva</h2>
+      <label>Quarto <select id="r-space"></select></label>
+      <div class="row2">
+        <label>Entrada <input type="date" id="r-in" required></label>
+        <label>Saída <input type="date" id="r-out" required></label>
+      </div>
+      <p id="r-nights" class="msg"></p>
+      <label id="r-block-wrap" class="check hidden"><input type="checkbox" id="r-block"> Aluguel por plataforma (bloqueio, sem pessoas)</label>
+      <label>Observação <input id="r-note" placeholder="Opcional"></label>
+      <div id="r-guests-wrap">
+        <h3>Pessoas</h3>
+        <div id="r-guests"></div>
+        <div id="g-add-row" class="guest-add">
+          <input id="g-name" list="people-names" placeholder="Nome (digite para buscar)">
+          <select id="g-type">
+            <option value="socio">Sócio</option>
+            <option value="convidado">Convidado</option>
+          </select>
+          <label class="check"><input type="checkbox" id="g-exempt"> Isento</label>
+          <button type="button" id="g-add" class="secondary">Adicionar</button>
+        </div>
+        <datalist id="people-names"></datalist>
+      </div>
+      <p id="r-total" class="total"></p>
+      <p id="r-msg" class="msg"></p>
+      <div class="dialog-actions">
+        <button type="button" id="r-delete" class="danger-text hidden">Cancelar reserva</button>
+        <span class="grow"></span>
+        <button type="button" id="r-close" class="secondary">Fechar</button>
+        <button type="submit" id="r-save">Salvar</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>

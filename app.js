@@ -7,10 +7,16 @@ const CONDITIONS = { bom: "Bom", reparo: "Precisa de reparo", inutilizavel: "Inu
 let me = null;
 let spaces = [];
 let families = [];
+let people = [];
+let rates = { socio: 30, convidado: 50 };
 let current = null;
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
 const say = (id, text) => { $(id).textContent = text || ""; };
+const VIEWS = ["inventory", "people", "agenda", "rates"];
+const setView = (name) => VIEWS.forEach((v) => show(v, v === name));
+const setActive = (match) =>
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", match(b)));
 
 async function init() {
   const { data: { session } } = await db.auth.getSession();
@@ -23,16 +29,20 @@ async function init() {
     return;
   }
   me = data;
-  const [{ data: sp }, { data: fam }] = await Promise.all([
+  const [{ data: sp }, { data: fam }, { data: ppl }, { data: rt }] = await Promise.all([
     db.from("spaces").select("*").order("sort"),
     db.from("families").select("*").order("name"),
+    db.rpc("list_people"),
+    db.rpc("get_rates"),
   ]);
   spaces = sp || [];
   families = fam || [];
+  people = ppl || [];
+  for (const r of rt || []) rates[r.key.replace("rate_", "")] = Number(r.value);
   show("login", false); show("denied", false); show("app", true);
   $("who").textContent = me.name || me.email;
   renderNav();
-  selectSpace(spaces[0]);
+  showAgenda();
 }
 
 function showLogin() {
@@ -48,6 +58,11 @@ function canEdit(space) {
 function renderNav() {
   const nav = $("spaces");
   nav.innerHTML = "";
+  const agenda = document.createElement("button");
+  agenda.id = "nav-agenda";
+  agenda.textContent = "📅 Agenda";
+  agenda.onclick = showAgenda;
+  nav.append(agenda);
   for (const [title, kind] of [["Casa comunitária", "common"], ["Quartos pessoais", "personal"]]) {
     const h = document.createElement("h3");
     h.textContent = title;
@@ -63,18 +78,22 @@ function renderNav() {
   if (me.is_admin) {
     const h = document.createElement("h3");
     h.textContent = "Administração";
-    const b = document.createElement("button");
-    b.textContent = "Pessoas";
-    b.id = "nav-people";
-    b.onclick = showPeople;
-    nav.append(h, b);
+    const peopleBtn = document.createElement("button");
+    peopleBtn.textContent = "Pessoas";
+    peopleBtn.id = "nav-people";
+    peopleBtn.onclick = showPeople;
+    const rt = document.createElement("button");
+    rt.textContent = "Valores";
+    rt.id = "nav-rates";
+    rt.onclick = showRates;
+    nav.append(h, peopleBtn, rt);
   }
 }
 
 async function selectSpace(space) {
   current = space;
-  show("people", false); show("inventory", true);
-  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", Number(b.dataset.id) === space.id));
+  setView("inventory");
+  setActive((b) => Number(b.dataset.id) === space.id);
   $("space-title").textContent = space.name;
   const edit = canEdit(space);
   show("readonly-badge", !edit);
@@ -221,8 +240,8 @@ $("csv-file").onchange = async (e) => {
 // ---- Administração de pessoas ----
 async function showPeople() {
   current = null;
-  show("inventory", false); show("people", true);
-  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.id === "nav-people"));
+  setView("people");
+  setActive((b) => b.id === "nav-people");
   const sel = $("p-family");
   if (!sel.options.length) {
     sel.append(new Option("Família…", ""));
@@ -288,6 +307,337 @@ $("form-person").onsubmit = async (e) => {
   if (error) return say("people-msg", error.code === "23505" ? "Esse e-mail já está cadastrado." : error.message);
   e.target.reset();
   loadPeople();
+};
+
+// ---- Valores ----
+function showRates() {
+  current = null;
+  setView("rates");
+  setActive((b) => b.id === "nav-rates");
+  $("r-socio").value = rates.socio;
+  $("r-convidado").value = rates.convidado;
+  say("rates-msg", "");
+}
+
+$("form-rates").onsubmit = async (e) => {
+  e.preventDefault();
+  const socio = Number($("r-socio").value);
+  const convidado = Number($("r-convidado").value);
+  const { error } = await db.from("settings").upsert([
+    { key: "rate_socio", value: socio },
+    { key: "rate_convidado", value: convidado },
+  ]);
+  if (error) return say("rates-msg", error.message);
+  rates = { socio, convidado };
+  say("rates-msg", "Valores salvos.");
+};
+
+// ---- Agenda ----
+const pad = (n) => String(n).padStart(2, "0");
+const fmtDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const nightsBetween = (a, b) => Math.round((parseDate(b) - parseDate(a)) / 864e5);
+const brDate = (s) => parseDate(s).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+const money = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const personName = (email) => people.find((p) => p.email === email)?.name || email;
+const TYPES = { socio: "Sócio", convidado: "Convidado" };
+const reservableRooms = () => spaces.filter((s) => s.kind === "common" && s.reservable);
+const canManage = (r) => me.is_admin || r.created_by === me.email;
+
+let agMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let monthRes = [];
+
+async function showAgenda() {
+  current = null;
+  setView("agenda");
+  setActive((b) => b.id === "nav-agenda");
+  await loadMonth();
+}
+
+const chargeRate = (g) => {
+  const c = Array.isArray(g.guest_charges) ? g.guest_charges[0] : g.guest_charges;
+  return c ? Number(c.rate) : null;
+};
+
+async function loadMonth() {
+  const y = agMonth.getFullYear(), m = agMonth.getMonth();
+  $("ag-label").textContent = agMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const { data, error } = await db.from("reservations")
+    .select("*, reservation_guests(*, guest_charges(rate))")
+    .eq("status", "confirmed")
+    .lt("check_in", fmtDate(new Date(y, m + 1, 1)))
+    .gt("check_out", fmtDate(new Date(y, m, 1)))
+    .order("check_in");
+  if (error) return say("agenda-msg", error.message);
+  say("agenda-msg", "");
+  monthRes = data;
+  renderGantt();
+  renderResList();
+}
+
+function barLabel(r) {
+  if (r.kind === "block") return "Aluguel";
+  const names = r.reservation_guests.map((g) => g.name);
+  return names.length ? names.join(", ") : personName(r.created_by);
+}
+
+function renderGantt() {
+  const y = agMonth.getFullYear(), m = agMonth.getMonth();
+  const days = new Date(y, m + 1, 0).getDate();
+  const next = new Date(y, m + 1, 1);
+  const today = fmtDate(new Date());
+  const el = $("gantt");
+  el.innerHTML = "";
+  el.style.setProperty("--days", days);
+  const put = (node, col, row) => { node.style.gridColumn = col; node.style.gridRow = row; el.append(node); return node; };
+  const div = (cls, text) => { const d = document.createElement("div"); d.className = cls; if (text != null) d.textContent = text; return d; };
+
+  put(div("g-head g-room"), 1, 1);
+  for (let d = 1; d <= days; d++) {
+    const dow = new Date(y, m, d).toLocaleDateString("pt-BR", { weekday: "narrow" });
+    put(div("g-head", `${d}\n${dow}`), d + 1, 1);
+  }
+  reservableRooms().forEach((room, i) => {
+    const row = i + 2;
+    put(div("g-room", room.name), 1, row);
+    for (let d = 1; d <= days; d++) {
+      const date = new Date(y, m, d);
+      const cell = div("g-cell" + ([0, 6].includes(date.getDay()) ? " we" : "") + (fmtDate(date) === today ? " today" : ""));
+      cell.title = `${room.name} – ${date.toLocaleDateString("pt-BR")}`;
+      cell.onclick = () => openReservation(null, { space_id: room.id, check_in: fmtDate(date) });
+      put(cell, d + 1, row);
+    }
+    for (const r of monthRes.filter((x) => x.space_id === room.id)) {
+      const s = parseDate(r.check_in) < new Date(y, m, 1) ? 1 : parseDate(r.check_in).getDate();
+      const e = parseDate(r.check_out) >= next ? days + 1 : parseDate(r.check_out).getDate();
+      const bar = div("bar" + (r.kind === "block" ? " block" : "") + (r.created_by === me.email ? " mine" : ""), barLabel(r));
+      bar.title = `${barLabel(r)} (${brDate(r.check_in)} → ${brDate(r.check_out)})`;
+      bar.onclick = () => openReservation(r);
+      put(bar, `${s + 1} / ${e + 1}`, row);
+    }
+  });
+}
+
+function reservationTotal(r) {
+  const nights = nightsBetween(r.check_in, r.check_out);
+  let total = 0;
+  for (const g of r.reservation_guests) {
+    if (g.exempt) continue;
+    const rate = chargeRate(g);
+    if (rate == null) return null;
+    total += rate * nights;
+  }
+  return total;
+}
+
+function renderResList() {
+  const box = $("res-list");
+  box.innerHTML = "";
+  if (!monthRes.length) {
+    box.innerHTML = '<p class="empty">Nenhuma reserva neste mês.</p>';
+    return;
+  }
+  for (const r of monthRes) {
+    const room = spaces.find((s) => s.id === r.space_id);
+    const nights = nightsBetween(r.check_in, r.check_out);
+    const card = document.createElement("div");
+    card.className = "res-card";
+    const head = document.createElement("div");
+    head.className = "res-head";
+    head.innerHTML = "";
+    const title = document.createElement("b");
+    title.textContent = `${room?.name ?? "?"} · ${brDate(r.check_in)} → ${brDate(r.check_out)}`;
+    const meta = document.createElement("span");
+    meta.className = "count";
+    meta.textContent = `${nights} ${nights === 1 ? "noite" : "noites"}`;
+    head.append(title, meta);
+    const body = document.createElement("div");
+    body.className = "res-body";
+    if (r.kind === "block") body.textContent = "Aluguel por plataforma" + (r.note ? ` – ${r.note}` : "");
+    else {
+      body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${personName(r.created_by)}`;
+      if (canManage(r)) {
+        const t = reservationTotal(r);
+        if (t != null) {
+          const tt = document.createElement("span");
+          tt.className = "tag bom";
+          tt.textContent = money(t);
+          body.append(" ", tt);
+        }
+      }
+    }
+    card.append(head, body);
+    card.onclick = () => openReservation(r);
+    box.append(card);
+  }
+}
+
+$("ag-prev").onclick = () => { agMonth = new Date(agMonth.getFullYear(), agMonth.getMonth() - 1, 1); loadMonth(); };
+$("ag-next").onclick = () => { agMonth = new Date(agMonth.getFullYear(), agMonth.getMonth() + 1, 1); loadMonth(); };
+$("ag-new").onclick = () => openReservation(null);
+
+// ---- Formulário de reserva ----
+let editing = null;
+let formGuests = [];
+let removedIds = [];
+let readOnly = false;
+
+function openReservation(r, preset = {}) {
+  editing = r;
+  readOnly = !!r && !canManage(r);
+  removedIds = [];
+  const isNew = !r;
+  $("res-title").textContent = isNew ? "Nova reserva" : readOnly ? "Reserva" : "Editar reserva";
+  const sel = $("r-space");
+  sel.innerHTML = "";
+  reservableRooms().forEach((s) => sel.append(new Option(s.name, s.id)));
+  sel.value = r?.space_id ?? preset.space_id ?? reservableRooms()[0]?.id;
+  $("r-in").value = r?.check_in ?? preset.check_in ?? "";
+  $("r-out").value = r?.check_out ?? (preset.check_in ? fmtDate(new Date(parseDate(preset.check_in).getTime() + 864e5)) : "");
+  $("r-note").value = r?.note ?? "";
+  show("r-block-wrap", me.is_admin && !readOnly);
+  $("r-block").checked = r?.kind === "block";
+  formGuests = (r?.reservation_guests ?? []).map((g) => ({
+    id: g.id, name: g.name, user_email: g.user_email, type: g.type, exempt: g.exempt, rate: chargeRate(g),
+  }));
+  $("people-names").innerHTML = "";
+  people.forEach((p) => $("people-names").append(new Option(p.name)));
+  say("r-msg", "");
+  show("r-delete", !isNew && !readOnly);
+  show("r-save", !readOnly);
+  show("g-add-row", !readOnly);
+  for (const id of ["r-space", "r-in", "r-out", "r-note", "r-block"]) $(id).disabled = readOnly;
+  refreshForm();
+  $("res-dialog").showModal();
+}
+
+function refreshForm() {
+  const block = $("r-block").checked;
+  show("r-guests-wrap", !block);
+  const nights = $("r-in").value && $("r-out").value ? nightsBetween($("r-in").value, $("r-out").value) : 0;
+  say("r-nights", nights > 0 ? `${nights} ${nights === 1 ? "noite" : "noites"}` : nights < 0 ? "A saída deve ser depois da entrada." : "");
+  const box = $("r-guests");
+  box.innerHTML = "";
+  formGuests.forEach((g, i) => {
+    const row = document.createElement("div");
+    row.className = "guest-row";
+    const name = document.createElement("span");
+    name.className = "g-name";
+    name.textContent = g.name;
+    const type = document.createElement("select");
+    Object.entries(TYPES).forEach(([k, v]) => type.append(new Option(v, k, false, k === g.type)));
+    type.disabled = readOnly;
+    type.onchange = () => { g.type = type.value; if (g.id) g.rate = null; refreshForm(); };
+    const ex = document.createElement("label");
+    ex.className = "check";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = g.exempt; cb.disabled = readOnly;
+    cb.onchange = () => { g.exempt = cb.checked; refreshForm(); };
+    ex.append(cb, " Isento");
+    row.append(name, type, ex);
+    if (!readOnly) {
+      const del = document.createElement("button");
+      del.type = "button"; del.className = "danger"; del.textContent = "✕";
+      del.onclick = () => { if (g.id) removedIds.push(g.id); formGuests.splice(i, 1); refreshForm(); };
+      row.append(del);
+    }
+    box.append(row);
+  });
+  const manage = !editing || canManage(editing);
+  if (!manage || block || nights <= 0) return say("r-total", "");
+  let total = 0, estimated = false;
+  for (const g of formGuests) {
+    if (g.exempt) continue;
+    const stored = g.id && g.rate != null && !(editing && g.type !== editing.reservation_guests.find((x) => x.id === g.id)?.type);
+    total += (stored ? g.rate : rates[g.type]) * nights;
+    if (!stored) estimated = true;
+  }
+  say("r-total", `Total: ${money(total)}${estimated ? " (valores atuais)" : ""}`);
+}
+
+function addGuest() {
+  const name = $("g-name").value.trim();
+  if (!name) return;
+  const person = people.find((p) => p.name?.toLowerCase() === name.toLowerCase());
+  formGuests.push({
+    name: person?.name ?? name, user_email: person?.email ?? null,
+    type: $("g-type").value, exempt: $("g-exempt").checked,
+  });
+  $("g-name").value = "";
+  $("g-exempt").checked = false;
+  refreshForm();
+}
+
+$("g-add").onclick = addGuest;
+$("g-name").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addGuest(); } };
+$("g-name").onchange = () => {
+  const name = $("g-name").value.trim().toLowerCase();
+  $("g-type").value = people.some((p) => p.name?.toLowerCase() === name) ? "socio" : "convidado";
+};
+$("r-block").onchange = refreshForm;
+$("r-in").onchange = () => {
+  const i = $("r-in").value;
+  if (i && (!$("r-out").value || $("r-out").value <= i)) $("r-out").value = fmtDate(new Date(parseDate(i).getTime() + 864e5));
+  refreshForm();
+};
+$("r-out").onchange = refreshForm;
+$("r-close").onclick = () => $("res-dialog").close();
+
+$("r-delete").onclick = async () => {
+  if (!confirm("Cancelar esta reserva?")) return;
+  const { error } = await db.from("reservations").delete().eq("id", editing.id);
+  if (error) return say("r-msg", error.message);
+  $("res-dialog").close();
+  loadMonth();
+};
+
+$("res-form").onsubmit = async (e) => {
+  e.preventDefault();
+  if (readOnly) return;
+  const block = $("r-block").checked;
+  const check_in = $("r-in").value, check_out = $("r-out").value;
+  if (nightsBetween(check_in, check_out) <= 0) return say("r-msg", "A saída deve ser depois da entrada.");
+  if (!block && !formGuests.length) return say("r-msg", "Adicione ao menos uma pessoa.");
+  const payload = {
+    space_id: Number($("r-space").value), check_in, check_out,
+    kind: block ? "block" : "stay", note: $("r-note").value.trim() || null, status: "confirmed",
+  };
+  $("r-save").disabled = true;
+  try {
+    let id;
+    if (editing) {
+      const { error } = await db.from("reservations").update(payload).eq("id", editing.id);
+      if (error) throw error;
+      id = editing.id;
+    } else {
+      const { data, error } = await db.from("reservations").insert({ ...payload, created_by: me.email }).select("id").single();
+      if (error) throw error;
+      id = data.id;
+    }
+    if (block) removedIds = (editing?.reservation_guests ?? []).map((g) => g.id);
+    if (removedIds.length) {
+      const { error } = await db.from("reservation_guests").delete().in("id", removedIds);
+      if (error) throw error;
+    }
+    const guests = block ? [] : formGuests;
+    const fresh = guests.filter((g) => !g.id).map((g) => ({
+      reservation_id: id, name: g.name, user_email: g.user_email, type: g.type, exempt: g.exempt,
+    }));
+    if (fresh.length) {
+      const { error } = await db.from("reservation_guests").insert(fresh);
+      if (error) throw error;
+    }
+    for (const g of guests.filter((x) => x.id)) {
+      const { error } = await db.from("reservation_guests").update({ name: g.name, type: g.type, exempt: g.exempt }).eq("id", g.id);
+      if (error) throw error;
+    }
+    $("res-dialog").close();
+    loadMonth();
+  } catch (err) {
+    say("r-msg", err.code === "23P01" ? "Esse quarto já está reservado em parte desse período." : err.message);
+  } finally {
+    $("r-save").disabled = false;
+  }
 };
 
 $("btn-google").onclick = () =>

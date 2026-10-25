@@ -23,7 +23,11 @@ button, .btn {
 }
 button:hover, .btn:hover { background: var(--primary-dark); }
 .btn.secondary { background: var(--primary-soft); color: var(--primary-dark); }
-.btn.secondary:hover { background: #cdeaec; }
+.btn.secondary:hover, button.secondary:hover { background: #cdeaec; }
+button.secondary { background: var(--primary-soft); color: var(--primary-dark); }
+button.danger-text { background: none; color: var(--danger); padding: 9px 4px; }
+button.danger-text:hover { background: none; text-decoration: underline; }
+button:disabled { opacity: .5; cursor: default; }
 button.link { background: none; color: inherit; padding: 4px 8px; font-weight: 500; opacity: .85; }
 button.link:hover { background: rgba(255,255,255,.15); opacity: 1; }
 input, select {
@@ -131,7 +135,7 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
 
 @media (max-width: 760px) {
   header { padding: 12px 16px; }
-  .layout { flex-direction: column; padding: 12px; gap: 12px; }
+  .layout { flex-direction: column; padding: 12px; gap: 12px; align-items: stretch; }
   nav {
     width: 100%; position: static; display: flex; gap: 6px; overflow-x: auto; padding: 8px;
   }
@@ -178,4 +182,53 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
   .add { flex-wrap: wrap; }
   .add input:first-child { flex-basis: 100%; }
   .add input[type=number] { flex: 1; }
+}
+
+/* Agenda */
+.month-nav { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.month-nav b::first-letter { text-transform: uppercase; }
+.month-nav button { padding: 4px 12px; font-size: 18px; line-height: 1; }
+.sub { margin: 24px 0 8px; font-size: 16px; }
+.gantt {
+  display: grid; grid-template-columns: 96px repeat(var(--days), minmax(30px, 1fr));
+  overflow-x: auto; margin-top: 16px; border: 1px solid var(--border); border-radius: 10px;
+}
+.g-head { font-size: 11px; color: var(--muted); text-align: center; white-space: pre; padding: 4px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+.g-room { position: sticky; left: 0; z-index: 3; background: var(--surface); font-weight: 600; font-size: 13px; padding: 0 10px; display: flex; align-items: center; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.g-head.g-room { background: var(--bg); }
+.g-cell { height: 46px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); cursor: pointer; }
+.g-cell:hover { background: var(--primary-soft); }
+.g-cell.we { background: #fafbfc; }
+.g-cell.today { box-shadow: inset 0 0 0 2px var(--primary); }
+.bar {
+  z-index: 1; margin: 7px 2px; padding: 0 8px; border-radius: 6px; background: var(--primary); color: #fff;
+  font-size: 12px; font-weight: 600; display: flex; align-items: center; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+}
+.bar.mine { background: var(--primary-dark); }
+.bar.block { background: #8a94a6; }
+.res-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; cursor: pointer; }
+.res-card:hover { background: var(--bg); }
+.res-head { display: flex; justify-content: space-between; gap: 8px; }
+.res-body { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.empty { text-align: center; color: var(--muted); padding: 24px 8px; }
+
+/* Diálogo de reserva */
+dialog { border: 0; border-radius: 16px; padding: 0; width: min(560px, calc(100% - 24px)); box-shadow: 0 20px 50px rgba(16, 24, 40, .25); color: var(--text); }
+dialog::backdrop { background: rgba(16, 24, 40, .45); }
+#res-form { padding: 22px; }
+#res-form h2 { margin: 0 0 14px; font-size: 20px; }
+#res-form h3 { margin: 14px 0 6px; font-size: 14px; }
+#res-form label:not(.check) { display: block; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+#res-form label:not(.check) input, #res-form label:not(.check) select { display: block; width: 100%; margin-top: 4px; color: var(--text); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.guest-row, .guest-add { display: flex; align-items: center; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
+.guest-row .g-name { flex: 1; min-width: 120px; font-weight: 600; }
+.guest-add input[list] { flex: 1; min-width: 150px; }
+.total { font-weight: 700; margin: 12px 0 0; }
+.dialog-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.grow { flex: 1; }
+@media (max-width: 760px) {
+  .month-nav { order: 3; flex-basis: 100%; margin-right: 0; }
+  .push { margin-left: auto; }
 }

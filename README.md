@@ -11,7 +11,10 @@ Site estático (HTML/JS) + Supabase (banco e login). Custo zero.
 6. Entre como vfbortolli@gmail.com, abra "Quarto Bortolli" e use **Importar CSV** com [quarto-bortolli.csv](quarto-bortolli.csv).
 
 ## Autorizar mais pessoas
-Insira linhas em `allowed_users` (Table Editor): e-mail em minúsculas, `family_id`, `is_responsible`, `is_admin`.
+Use **Administração > Pessoas** no app (só administradores).
+
+## Agenda e valores (Fase 2, etapa A)
+Execute [supabase/phase2a.sql](supabase/phase2a.sql) no SQL Editor. Cria reservas, pessoas por reserva, valores e regras de acesso. Os valores (padrão R$ 30 sócio / R$ 50 convidado) são editados em **Administração > Valores**.
 
 ## Hospedagem gratuita
 Publique a pasta em Cloudflare Pages, Netlify ou GitHub Pages (sem build).
