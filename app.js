@@ -314,6 +314,18 @@ $("form-person").onsubmit = async (e) => {
 };
 
 // ---- Valores ----
+$("btn-backup").onclick = async () => {
+  say("backup-msg", "Gerando…");
+  const { data, error } = await db.rpc("export_backup");
+  if (error) return say("backup-msg", error.message);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  a.download = `backup-casa-de-praia-${fmtDate(new Date())}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  say("backup-msg", "Backup baixado.");
+};
+
 // ---- Cobrança ----
 let blMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let blRows = [];
