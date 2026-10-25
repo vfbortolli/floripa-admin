@@ -204,6 +204,10 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
 .bl-line input { width: 18px; height: 18px; flex: none; }
 .bl-line span { flex: 1; min-width: 0; }
 .bl-line b { color: var(--text); white-space: nowrap; }
+.hs-card { cursor: default; }
+.hs-card:hover { background: none; }
+.hs-card .res-body { word-break: break-word; }
+#hs-more { display: block; margin: 12px auto 0; }
 .chip { flex: none; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 6px 16px; font-weight: 600; }
 .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .sub { margin: 24px 0 8px; font-size: 16px; }

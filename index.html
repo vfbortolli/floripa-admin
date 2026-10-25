@@ -75,6 +75,23 @@
         </div>
         <p id="agenda-msg" class="msg"></p>
       </main>
+      <main id="history" class="hidden">
+        <div class="toolbar">
+          <h2>Histórico</h2>
+          <select id="hs-filter" class="push" aria-label="Filtrar">
+            <option value="">Tudo</option>
+            <option value="items">Inventário</option>
+            <option value="reservations">Reservas</option>
+            <option value="reservation_guests">Pessoas das reservas</option>
+            <option value="guest_charges">Cobranças</option>
+            <option value="allowed_users">Pessoas cadastradas</option>
+            <option value="settings">Valores</option>
+          </select>
+        </div>
+        <div id="hs-list"></div>
+        <button id="hs-more" class="secondary hidden">Carregar mais</button>
+        <p id="hs-msg" class="msg"></p>
+      </main>
       <main id="billing" class="hidden">
         <div class="toolbar">
           <h2>Cobrança</h2>

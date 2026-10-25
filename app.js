@@ -13,7 +13,7 @@ let current = null;
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
 const say = (id, text) => { $(id).textContent = text || ""; };
-const VIEWS = ["inventory", "people", "agenda", "rates", "billing"];
+const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "history"];
 const setView = (name) => VIEWS.forEach((v) => show(v, v === name));
 const setActive = (match) =>
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", match(b)));
@@ -91,6 +91,11 @@ function renderNav() {
     bl.id = "nav-billing";
     bl.onclick = showBilling;
     nav.append(h, peopleBtn, bl, rt);
+    const hs = document.createElement("button");
+    hs.textContent = "Histórico";
+    hs.id = "nav-history";
+    hs.onclick = showHistory;
+    nav.append(hs);
   }
 }
 
@@ -325,6 +330,83 @@ $("btn-backup").onclick = async () => {
   URL.revokeObjectURL(a.href);
   say("backup-msg", "Backup baixado.");
 };
+
+// ---- Histórico ----
+const HS_PAGE = 50;
+let hsRows = [];
+
+const HS_TABLES = {
+  items: "Item", reservations: "Reserva", reservation_guests: "Pessoa da reserva",
+  allowed_users: "Pessoa", settings: "Valor", guest_charges: "Cobrança",
+};
+const HS_FIELDS = {
+  description: "descrição", quantity: "quantidade", condition: "estado", notes: "observações",
+  space_id: "quarto", check_in: "entrada", check_out: "saída", kind: "tipo", status: "situação", note: "observação",
+  name: "nome", type: "tipo", exempt: "isento", is_admin: "admin", is_responsible: "responsável",
+  family_id: "família", value: "valor", paid: "pago", user_email: "e-mail", rate: "valor/noite",
+};
+const HS_VALUES = {
+  bom: "Bom", reparo: "Precisa de reparo", inutilizavel: "Inutilizável",
+  socio: "Sócio", convidado: "Convidado", confirmed: "Confirmada", pending: "Pendente", rejected: "Recusada",
+  stay: "Estadia", block: "Bloqueio",
+};
+
+function hsValue(field, v) {
+  if (v == null || v === "") return "—";
+  if (typeof v === "boolean") return v ? "Sim" : "Não";
+  if (field === "space_id") return roomById(v)?.name ?? v;
+  if (field === "family_id") return families.find((f) => f.id === v)?.name ?? v;
+  return HS_VALUES[v] ?? v;
+}
+
+function hsText(r) {
+  const op = { INSERT: "criou", UPDATE: "alterou", DELETE: "removeu" }[r.op];
+  const head = `${op} ${HS_TABLES[r.tbl]?.toLowerCase() ?? r.tbl} “${r.label ?? r.row_id ?? ""}”`;
+  if (r.op !== "UPDATE") return head;
+  const changes = Object.keys(r.new_data ?? {}).map(
+    (k) => `${HS_FIELDS[k] ?? k}: ${hsValue(k, r.old_data?.[k])} → ${hsValue(k, r.new_data[k])}`);
+  return `${head} (${changes.join("; ")})`;
+}
+
+async function showHistory() {
+  current = null;
+  setView("history");
+  setActive((b) => b.id === "nav-history");
+  hsRows = [];
+  $("hs-list").innerHTML = "";
+  await loadHistory();
+}
+
+async function loadHistory() {
+  let q = db.from("audit_log").select("*").order("id", { ascending: false }).range(hsRows.length, hsRows.length + HS_PAGE - 1);
+  if ($("hs-filter").value) q = q.eq("tbl", $("hs-filter").value);
+  const { data, error } = await q;
+  if (error) return say("hs-msg", error.message);
+  say("hs-msg", "");
+  hsRows = hsRows.concat(data);
+  show("hs-more", data.length === HS_PAGE);
+  for (const r of data) {
+    const card = document.createElement("div");
+    card.className = "res-card hs-card";
+    const head = document.createElement("div");
+    head.className = "res-head";
+    const who = document.createElement("b");
+    who.textContent = r.actor === "sistema" ? "Sistema" : personName(r.actor);
+    const when = document.createElement("span");
+    when.className = "count";
+    when.textContent = new Date(r.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    head.append(who, when);
+    const body = document.createElement("div");
+    body.className = "res-body";
+    body.textContent = hsText(r);
+    card.append(head, body);
+    $("hs-list").append(card);
+  }
+  if (!hsRows.length) $("hs-list").innerHTML = '<p class="empty">Nenhuma alteração registrada.</p>';
+}
+
+$("hs-filter").onchange = () => { hsRows = []; $("hs-list").innerHTML = ""; loadHistory(); };
+$("hs-more").onclick = loadHistory;
 
 // ---- Cobrança ----
 let blMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
