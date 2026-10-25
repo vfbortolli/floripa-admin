@@ -190,7 +190,7 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
 .month-nav button { padding: 4px 12px; font-size: 18px; line-height: 1; }
 .sub { margin: 24px 0 8px; font-size: 16px; }
 .gantt {
-  display: grid; grid-template-columns: 96px repeat(var(--days), minmax(30px, 1fr));
+  display: grid; grid-template-columns: 96px repeat(calc(var(--days) * 2), minmax(20px, 1fr));
   overflow-x: auto; margin-top: 16px; border: 1px solid var(--border); border-radius: 10px;
 }
 .g-head { font-size: 11px; color: var(--muted); text-align: center; white-space: pre; padding: 4px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
@@ -206,7 +206,20 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
   white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
 }
 .bar.mine { background: var(--primary-dark); }
-.bar.block { background: #8a94a6; }
+.bar.block {
+  background: repeating-linear-gradient(45deg, #7b8496, #7b8496 8px, #8d96a7 8px, #8d96a7 16px);
+}
+.bar { min-width: 0; }
+.msg:is(#r-msg, #agenda-msg):not(:empty) {
+  background: #fdecea; color: #b42318; border: 1px solid #f5b5ae; border-radius: 10px;
+  padding: 10px 12px; font-weight: 600;
+}
+.block-toggle {
+  display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; padding: 12px 14px;
+  background: var(--bg); border: 1px dashed var(--border); border-radius: 10px; font-size: 14px; cursor: pointer;
+}
+.block-toggle.hidden { display: none; }
+.block-toggle input { width: 18px; height: 18px; flex: none; }
 .res-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; cursor: pointer; }
 .res-card:hover { background: var(--bg); }
 .res-head { display: flex; justify-content: space-between; gap: 8px; }

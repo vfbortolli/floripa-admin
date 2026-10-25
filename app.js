@@ -377,7 +377,7 @@ async function loadMonth() {
 
 function barLabel(r) {
   if (r.kind === "block") return "Aluguel";
-  const names = r.reservation_guests.map((g) => g.name);
+  const names = r.reservation_guests.map((g) => g.name.split(" ")[0]);
   return names.length ? names.join(", ") : personName(r.created_by);
 }
 
@@ -395,7 +395,7 @@ function renderGantt() {
   put(div("g-head g-room"), 1, 1);
   for (let d = 1; d <= days; d++) {
     const dow = new Date(y, m, d).toLocaleDateString("pt-BR", { weekday: "narrow" });
-    put(div("g-head", `${d}\n${dow}`), d + 1, 1);
+    put(div("g-head", `${d}\n${dow}`), `${2 * d} / span 2`, 1);
   }
   reservableRooms().forEach((room, i) => {
     const row = i + 2;
@@ -405,15 +405,17 @@ function renderGantt() {
       const cell = div("g-cell" + ([0, 6].includes(date.getDay()) ? " we" : "") + (fmtDate(date) === today ? " today" : ""));
       cell.title = `${room.name} – ${date.toLocaleDateString("pt-BR")}`;
       cell.onclick = () => openReservation(null, { space_id: room.id, check_in: fmtDate(date) });
-      put(cell, d + 1, row);
+      put(cell, `${2 * d} / span 2`, row);
     }
     for (const r of monthRes.filter((x) => x.space_id === room.id)) {
-      const s = parseDate(r.check_in) < new Date(y, m, 1) ? 1 : parseDate(r.check_in).getDate();
-      const e = parseDate(r.check_out) >= next ? days + 1 : parseDate(r.check_out).getDate();
+      // a barra vai do meio do dia de entrada ao meio do dia de saída
+      const inD = parseDate(r.check_in), outD = parseDate(r.check_out);
+      const s = inD < new Date(y, m, 1) ? 2 : 2 * inD.getDate() + 1;
+      const e = outD >= next ? 2 * days + 2 : 2 * outD.getDate() + 1;
       const bar = div("bar" + (r.kind === "block" ? " block" : "") + (r.created_by === me.email ? " mine" : ""), barLabel(r));
       bar.title = `${barLabel(r)} (${brDate(r.check_in)} → ${brDate(r.check_out)})`;
       bar.onclick = () => openReservation(r);
-      put(bar, `${s + 1} / ${e + 1}`, row);
+      put(bar, `${s} / ${e}`, row);
     }
   });
 }
