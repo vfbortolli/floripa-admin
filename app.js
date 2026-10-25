@@ -306,5 +306,8 @@ const logout = async () => { await db.auth.signOut(); location.reload(); };
 $("btn-logout").onclick = logout;
 $("btn-logout-denied").onclick = logout;
 
-db.auth.onAuthStateChange((event) => { if (event === "SIGNED_IN") init(); });
+db.auth.onAuthStateChange((event, session) => {
+  if (event === "SIGNED_IN" && session && me?.email !== session.user.email.toLowerCase()) init();
+  if (event === "SIGNED_OUT") location.reload();
+});
 init();
