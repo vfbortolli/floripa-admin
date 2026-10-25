@@ -71,6 +71,21 @@
         </div>
         <p id="agenda-msg" class="msg"></p>
       </main>
+      <main id="billing" class="hidden">
+        <div class="toolbar">
+          <h2>Cobrança</h2>
+          <span class="month-nav">
+            <button id="bl-prev" class="secondary" aria-label="Mês anterior">‹</button>
+            <b id="bl-label"></b>
+            <button id="bl-next" class="secondary" aria-label="Próximo mês">›</button>
+          </span>
+          <button id="bl-csv" class="secondary push">Exportar CSV</button>
+        </div>
+        <p class="msg">Reservas confirmadas com entrada no mês, agrupadas por pessoa. Isentos não entram.</p>
+        <div id="bl-totals" class="bl-totals"></div>
+        <div id="bl-list"></div>
+        <p id="bl-msg" class="msg"></p>
+      </main>
       <main id="rates" class="hidden">
         <div class="toolbar"><h2>Valores</h2></div>
         <p class="msg">Valor por pessoa por noite. Reservas já criadas mantêm o valor de quando foram feitas.</p>

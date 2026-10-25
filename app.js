@@ -13,7 +13,7 @@ let current = null;
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
 const say = (id, text) => { $(id).textContent = text || ""; };
-const VIEWS = ["inventory", "people", "agenda", "rates"];
+const VIEWS = ["inventory", "people", "agenda", "rates", "billing"];
 const setView = (name) => VIEWS.forEach((v) => show(v, v === name));
 const setActive = (match) =>
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", match(b)));
@@ -86,7 +86,11 @@ function renderNav() {
     rt.textContent = "Valores";
     rt.id = "nav-rates";
     rt.onclick = showRates;
-    nav.append(h, peopleBtn, rt);
+    const bl = document.createElement("button");
+    bl.textContent = "Cobrança";
+    bl.id = "nav-billing";
+    bl.onclick = showBilling;
+    nav.append(h, peopleBtn, bl, rt);
   }
 }
 
@@ -310,6 +314,118 @@ $("form-person").onsubmit = async (e) => {
 };
 
 // ---- Valores ----
+// ---- Cobrança ----
+let blMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let blRows = [];
+
+async function showBilling() {
+  current = null;
+  setView("billing");
+  setActive((b) => b.id === "nav-billing");
+  await loadBilling();
+}
+
+async function loadBilling() {
+  const y = blMonth.getFullYear(), m = blMonth.getMonth();
+  $("bl-label").textContent = blMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const { data, error } = await db.from("reservations")
+    .select("id, space_id, check_in, check_out, reservation_guests(id, name, user_email, type, exempt, guest_charges(rate, paid))")
+    .eq("status", "confirmed").eq("kind", "stay")
+    .gte("check_in", fmtDate(new Date(y, m, 1)))
+    .lt("check_in", fmtDate(new Date(y, m + 1, 1)))
+    .order("check_in");
+  if (error) return say("bl-msg", error.message);
+  say("bl-msg", "");
+  blRows = [];
+  for (const r of data) {
+    const nights = nightsBetween(r.check_in, r.check_out);
+    for (const g of r.reservation_guests) {
+      const c = Array.isArray(g.guest_charges) ? g.guest_charges[0] : g.guest_charges;
+      if (g.exempt || !c) continue;
+      blRows.push({
+        guestId: g.id, who: g.user_email ? personName(g.user_email) : g.name, type: g.type,
+        room: roomById(r.space_id)?.name ?? "?", check_in: r.check_in, check_out: r.check_out,
+        nights, rate: Number(c.rate), amount: Number(c.rate) * nights, paid: !!c.paid,
+      });
+    }
+  }
+  renderBilling();
+}
+
+function renderBilling() {
+  const sum = (rows) => rows.reduce((t, r) => t + r.amount, 0);
+  const paid = sum(blRows.filter((r) => r.paid));
+  const total = sum(blRows);
+  $("bl-totals").innerHTML = "";
+  for (const [label, v, cls] of [["Total", total, ""], ["Pago", paid, "ok"], ["A receber", total - paid, total - paid ? "warn" : ""]]) {
+    const d = document.createElement("div");
+    d.className = "bl-box " + cls;
+    const s = document.createElement("span");
+    s.textContent = label;
+    const b = document.createElement("b");
+    b.textContent = money(v);
+    d.append(s, b);
+    $("bl-totals").append(d);
+  }
+  const box = $("bl-list");
+  box.innerHTML = "";
+  if (!blRows.length) {
+    box.innerHTML = '<p class="empty">Nenhuma cobrança neste mês.</p>';
+    return;
+  }
+  const groups = new Map();
+  for (const r of blRows) groups.set(r.who, [...(groups.get(r.who) ?? []), r]);
+  for (const [who, rows] of [...groups].sort((a, b) => a[0].localeCompare(b[0], "pt-BR"))) {
+    const card = document.createElement("div");
+    card.className = "res-card bl-card";
+    const head = document.createElement("div");
+    head.className = "res-head";
+    const name = document.createElement("b");
+    name.textContent = who;
+    const open = sum(rows.filter((r) => !r.paid));
+    const tag = document.createElement("span");
+    tag.className = "tag " + (open ? "reparo" : "bom");
+    tag.textContent = open ? `Deve ${money(open)}` : "Quitado";
+    head.append(name, tag);
+    card.append(head);
+    for (const r of rows) {
+      const line = document.createElement("label");
+      line.className = "bl-line";
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = r.paid;
+      cb.onchange = async () => {
+        cb.disabled = true;
+        const { error } = await db.from("guest_charges")
+          .update({ paid: cb.checked, paid_at: cb.checked ? new Date().toISOString() : null }).eq("guest_id", r.guestId);
+        if (error) { say("bl-msg", error.message); cb.checked = !cb.checked; cb.disabled = false; return; }
+        r.paid = cb.checked;
+        renderBilling();
+      };
+      const txt = document.createElement("span");
+      txt.textContent = `${r.room} · ${brDate(r.check_in)} → ${brDate(r.check_out)} · ${r.nights}×${money(r.rate)} (${TYPES[r.type]})`;
+      const amt = document.createElement("b");
+      amt.textContent = money(r.amount);
+      line.append(cb, txt, amt);
+      card.append(line);
+    }
+    box.append(card);
+  }
+}
+
+$("bl-prev").onclick = () => { blMonth = new Date(blMonth.getFullYear(), blMonth.getMonth() - 1, 1); loadBilling(); };
+$("bl-next").onclick = () => { blMonth = new Date(blMonth.getFullYear(), blMonth.getMonth() + 1, 1); loadBilling(); };
+$("bl-csv").onclick = () => {
+  const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [["Pessoa", "Quarto", "Entrada", "Saída", "Noites", "Tipo", "Valor/noite", "Total", "Pago"]];
+  for (const r of blRows) lines.push([r.who, r.room, r.check_in, r.check_out, r.nights, TYPES[r.type], r.rate.toFixed(2), r.amount.toFixed(2), r.paid ? "Sim" : "Não"]);
+  const blob = new Blob(["\ufeff" + lines.map((l) => l.map(esc).join(";")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `cobranca-${fmtDate(blMonth).slice(0, 7)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
 function showRates() {
   current = null;
   setView("rates");

@@ -192,6 +192,18 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
 .chip.personal:not(.active) { background: #fff; }
 .badge { background: #d92d20; color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; margin-left: 6px; }
 .status-note { background: #fff4e5; color: #9a5b00; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 0 0 12px; }
+.bl-totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0 16px; }
+.bl-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.bl-box span { font-size: 12px; color: var(--muted); }
+.bl-box b { font-size: 18px; }
+.bl-box.ok b { color: #1b7a3d; }
+.bl-box.warn b { color: #9a5b00; }
+.bl-card { cursor: default; }
+.bl-card:hover { background: none; }
+.bl-line { display: flex; align-items: center; gap: 10px; padding: 8px 0 2px; font-size: 14px; color: var(--muted); cursor: pointer; border-top: 1px solid var(--border); margin-top: 8px; }
+.bl-line input { width: 18px; height: 18px; flex: none; }
+.bl-line span { flex: 1; min-width: 0; }
+.bl-line b { color: var(--text); white-space: nowrap; }
 .chip { flex: none; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 6px 16px; font-weight: 600; }
 .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .sub { margin: 24px 0 8px; font-size: 16px; }
