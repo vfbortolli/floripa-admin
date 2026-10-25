@@ -341,11 +341,17 @@ const brDate = (s) => parseDate(s).toLocaleDateString("pt-BR", { day: "2-digit",
 const money = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const personName = (email) => people.find((p) => p.email === email)?.name || email;
 const TYPES = { socio: "Sócio", convidado: "Convidado" };
-const reservableRooms = () => spaces.filter((s) => s.kind === "common" && s.reservable);
+const reservableRooms = () => spaces.filter((s) => s.reservable);
+const roomById = (id) => spaces.find((s) => s.id === id);
+const canApprove = (room) => !!room && room.kind === "personal" && (me.is_admin || canEdit(room));
 const canManage = (r) => me.is_admin || r.created_by === me.email;
+const autoConfirm = (room) => room.kind === "common" || me.is_admin || canEdit(room);
+const statusFor = (room, existing) =>
+  room.kind === "common" ? "confirmed" : existing?.status === "pending" ? "pending" : autoConfirm(room) ? "confirmed" : "pending";
 
 let agMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let monthRes = [];
+let pendingRes = [];
 let agRoom = null;
 
 function renderRoomChips() {
@@ -353,8 +359,15 @@ function renderRoomChips() {
   box.innerHTML = "";
   for (const room of reservableRooms()) {
     const b = document.createElement("button");
-    b.className = "chip" + (room.id === agRoom ? " active" : "");
+    b.className = "chip" + (room.id === agRoom ? " active" : "") + (room.kind === "personal" ? " personal" : "");
     b.textContent = room.name;
+    const n = canApprove(room) ? pendingRes.filter((r) => r.status === "pending" && r.space_id === room.id).length : 0;
+    if (n) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = n;
+      b.append(badge);
+    }
     b.onclick = () => { agRoom = room.id; renderRoomChips(); renderGantt(); renderResList(); };
     box.append(b);
   }
@@ -366,7 +379,46 @@ async function showAgenda() {
   current = null;
   setView("agenda");
   setActive((b) => b.id === "nav-agenda");
-  await loadMonth();
+  await Promise.all([loadMonth(), loadPending()]);
+}
+
+async function loadPending() {
+  const { data, error } = await db.from("reservations")
+    .select("*, reservation_guests(*, guest_charges(rate))")
+    .in("status", ["pending", "rejected"])
+    .gte("check_out", fmtDate(new Date()))
+    .order("check_in");
+  if (error) return say("agenda-msg", error.message);
+  pendingRes = data.filter((r) => r.status === "pending" || r.created_by === me.email);
+  const todo = pendingRes.filter((r) => r.status === "pending" && canApprove(roomById(r.space_id))).length;
+  $("nav-agenda").textContent = "📅 Agenda" + (todo ? ` (${todo})` : "");
+  renderRoomChips();
+  renderPendingList();
+}
+
+function renderPendingList() {
+  const box = $("pending-list");
+  box.innerHTML = "";
+  show("pending-wrap", pendingRes.length > 0);
+  for (const r of pendingRes) {
+    const room = roomById(r.space_id);
+    const card = document.createElement("div");
+    card.className = "res-card";
+    const head = document.createElement("div");
+    head.className = "res-head";
+    const title = document.createElement("b");
+    title.textContent = `${room?.name ?? "?"} · ${brDate(r.check_in)} → ${brDate(r.check_out)}`;
+    const tag = document.createElement("span");
+    tag.className = "tag " + (r.status === "pending" ? "reparo" : "inutilizavel");
+    tag.textContent = r.status === "pending" ? (canApprove(room) ? "Aguardando você" : "Pendente") : "Recusada";
+    head.append(title, tag);
+    const body = document.createElement("div");
+    body.className = "res-body";
+    body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${personName(r.created_by)}`;
+    card.append(head, body);
+    card.onclick = () => openReservation(r);
+    box.append(card);
+  }
 }
 
 const chargeRate = (g) => {
@@ -526,6 +578,17 @@ function openReservation(r, preset = {}) {
   $("r-note").value = r?.note ?? "";
   show("r-block-wrap", me.is_admin && !readOnly);
   $("r-block").checked = r?.kind === "block";
+  const room0 = roomById(Number($("r-space").value));
+  const st = $("r-status");
+  const notes = {
+    pending: "Solicitação pendente: não bloqueia o período até ser aprovada pelo responsável do quarto ou por um administrador.",
+    rejected: "Solicitação recusada. Ao salvar, ela volta a ficar pendente.",
+  };
+  const msg = r && notes[r.status] ? notes[r.status] : "";
+  st.textContent = msg;
+  show("r-status", !!msg);
+  show("r-approve", !!r && r.status === "pending" && canApprove(room0));
+  show("r-reject", !!r && r.status === "pending" && canApprove(room0));
   formGuests = (r?.reservation_guests ?? []).map((g) => ({
     id: g.id, name: g.name, user_email: g.user_email, type: g.type, exempt: g.exempt, rate: chargeRate(g),
   }));
@@ -541,6 +604,14 @@ function openReservation(r, preset = {}) {
 }
 
 function refreshForm() {
+  const room = roomById(Number($("r-space").value));
+  const needsApproval = !editing && room && !autoConfirm(room);
+  $("res-title").textContent = editing ? (readOnly ? "Reserva" : "Editar reserva") : needsApproval ? "Solicitar reserva" : "Nova reserva";
+  $("r-save").textContent = needsApproval ? "Enviar solicitação" : "Salvar";
+  if (needsApproval) {
+    $("r-status").textContent = "Este é um quarto pessoal: a reserva só vale depois de aprovada pelo responsável ou por um administrador.";
+    show("r-status", true);
+  } else if (!editing) show("r-status", false);
   const block = $("r-block").checked;
   show("r-guests-wrap", !block);
   const nights = $("r-in").value && $("r-out").value ? nightsBetween($("r-in").value, $("r-out").value) : 0;
@@ -617,8 +688,28 @@ $("r-delete").onclick = async () => {
   const { error } = await db.from("reservations").delete().eq("id", editing.id);
   if (error) return say("r-msg", error.message);
   $("res-dialog").close();
-  loadMonth();
+  loadAll();
 };
+
+const loadAll = () => Promise.all([loadMonth(), loadPending()]);
+
+async function resolveReservation(approve) {
+  const id = editing.id;
+  let { error } = approve
+    ? await db.rpc("approve_reservation", { p_id: id, p_replace: false })
+    : await db.rpc("reject_reservation", { p_id: id });
+  if (error && approve && error.message.includes("CONFLITO")) {
+    if (!me.is_admin) return say("r-msg", "Já existe reserva confirmada nesse período. Peça a um administrador para decidir.");
+    if (!confirm("Já existe reserva confirmada nesse período.\n\nOK = substituir (a existente será recusada) e aprovar.\nCancelar = manter a existente.")) return;
+    ({ error } = await db.rpc("approve_reservation", { p_id: id, p_replace: true }));
+  }
+  if (error) return say("r-msg", error.message);
+  $("res-dialog").close();
+  loadAll();
+}
+$("r-approve").onclick = () => resolveReservation(true);
+$("r-reject").onclick = () => { if (confirm("Recusar esta solicitação?")) resolveReservation(false); };
+$("r-space").onchange = refreshForm;
 
 $("res-form").onsubmit = async (e) => {
   e.preventDefault();
@@ -627,9 +718,10 @@ $("res-form").onsubmit = async (e) => {
   const check_in = $("r-in").value, check_out = $("r-out").value;
   if (nightsBetween(check_in, check_out) <= 0) return say("r-msg", "A saída deve ser depois da entrada.");
   if (!block && !formGuests.length) return say("r-msg", "Adicione ao menos uma pessoa.");
+  const room = roomById(Number($("r-space").value));
   const payload = {
-    space_id: Number($("r-space").value), check_in, check_out,
-    kind: block ? "block" : "stay", note: $("r-note").value.trim() || null, status: "confirmed",
+    space_id: room.id, check_in, check_out,
+    kind: block ? "block" : "stay", note: $("r-note").value.trim() || null, status: statusFor(room, editing),
   };
   $("r-save").disabled = true;
   try {
@@ -661,9 +753,9 @@ $("res-form").onsubmit = async (e) => {
       if (error) throw error;
     }
     $("res-dialog").close();
-    loadMonth();
+    loadAll();
   } catch (err) {
-    say("r-msg", err.code === "23P01" ? "Esse quarto já está reservado em parte desse período." : err.message);
+    say("r-msg", err.code === "23P01" ? "Esse quarto já está reservado em parte desse período. Escolha outras datas." : err.message);
   } finally {
     $("r-save").disabled = false;
   }

@@ -188,7 +188,10 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
 .month-nav { display: flex; align-items: center; gap: 10px; margin-right: auto; }
 .month-nav b::first-letter { text-transform: uppercase; }
 .month-nav button { padding: 4px 12px; font-size: 18px; line-height: 1; }
-.chips { display: flex; gap: 8px; overflow-x: auto; margin-top: 14px; padding-bottom: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chip.personal:not(.active) { background: #fff; }
+.badge { background: #d92d20; color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 7px; margin-left: 6px; }
+.status-note { background: #fff4e5; color: #9a5b00; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 0 0 12px; }
 .chip { flex: none; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 6px 16px; font-weight: 600; }
 .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
 .sub { margin: 24px 0 8px; font-size: 16px; }

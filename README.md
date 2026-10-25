@@ -16,6 +16,9 @@ Use **Administração > Pessoas** no app (só administradores).
 ## Agenda e valores (Fase 2, etapa A)
 Execute [supabase/phase2a.sql](supabase/phase2a.sql) no SQL Editor. Cria reservas, pessoas por reserva, valores e regras de acesso. Os valores (padrão R$ 30 sócio / R$ 50 convidado) são editados em **Administração > Valores**.
 
+## Quartos pessoais e aprovações (Fase 2, etapa B)
+Depois, execute [supabase/phase2b.sql](supabase/phase2b.sql). Reservas em quartos pessoais ficam pendentes (sem bloquear datas) até o responsável da família ou um administrador aprovar. Em caso de conflito com uma reserva confirmada, só um administrador pode substituí-la.
+
 ## Hospedagem gratuita
 Publique a pasta em Cloudflare Pages, Netlify ou GitHub Pages (sem build).
 

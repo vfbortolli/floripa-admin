@@ -65,6 +65,10 @@
         <div id="gantt" class="gantt"></div>
         <h3 class="sub">Reservas do mês</h3>
         <div id="res-list"></div>
+        <div id="pending-wrap" class="hidden">
+          <h3 class="sub">Solicitações de quartos pessoais</h3>
+          <div id="pending-list"></div>
+        </div>
         <p id="agenda-msg" class="msg"></p>
       </main>
       <main id="rates" class="hidden">
@@ -103,6 +107,7 @@
   <dialog id="res-dialog">
     <form id="res-form">
       <h2 id="res-title">Nova reserva</h2>
+      <p id="r-status" class="status-note hidden"></p>
       <label>Quarto <select id="r-space"></select></label>
       <div class="row2">
         <label>Entrada <input type="date" id="r-in" required></label>
@@ -129,8 +134,10 @@
       <p id="r-msg" class="msg"></p>
       <div class="dialog-actions">
         <button type="button" id="r-delete" class="danger-text hidden">Cancelar reserva</button>
+        <button type="button" id="r-reject" class="danger-text hidden">Recusar</button>
         <span class="grow"></span>
         <button type="button" id="r-close" class="secondary">Fechar</button>
+        <button type="button" id="r-approve" class="hidden">Aprovar</button>
         <button type="submit" id="r-save">Salvar</button>
       </div>
     </form>
