@@ -6,6 +6,7 @@ const CONDITIONS = { bom: "Bom", reparo: "Precisa de reparo", inutilizavel: "Inu
 
 let me = null;
 let spaces = [];
+let families = [];
 let current = null;
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
@@ -22,8 +23,12 @@ async function init() {
     return;
   }
   me = data;
-  const [{ data: sp }] = await Promise.all([db.from("spaces").select("*").order("sort")]);
+  const [{ data: sp }, { data: fam }] = await Promise.all([
+    db.from("spaces").select("*").order("sort"),
+    db.from("families").select("*").order("name"),
+  ]);
   spaces = sp || [];
+  families = fam || [];
   show("login", false); show("denied", false); show("app", true);
   $("who").textContent = me.name || me.email;
   renderNav();
@@ -55,10 +60,20 @@ function renderNav() {
       nav.append(b);
     }
   }
+  if (me.is_admin) {
+    const h = document.createElement("h3");
+    h.textContent = "Administração";
+    const b = document.createElement("button");
+    b.textContent = "Pessoas";
+    b.id = "nav-people";
+    b.onclick = showPeople;
+    nav.append(h, b);
+  }
 }
 
 async function selectSpace(space) {
   current = space;
+  show("people", false); show("inventory", true);
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", Number(b.dataset.id) === space.id));
   $("space-title").textContent = space.name;
   const edit = canEdit(space);
@@ -201,6 +216,78 @@ $("csv-file").onchange = async (e) => {
   const { error } = await db.from("items").insert(items);
   say("app-msg", error ? error.message : `${items.length} itens importados.`);
   if (!error) loadItems();
+};
+
+// ---- Administração de pessoas ----
+async function showPeople() {
+  current = null;
+  show("inventory", false); show("people", true);
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.id === "nav-people"));
+  const sel = $("p-family");
+  if (!sel.options.length) {
+    sel.append(new Option("Família…", ""));
+    families.forEach((f) => sel.append(new Option(f.name, f.id)));
+  }
+  await loadPeople();
+}
+
+async function loadPeople() {
+  const { data, error } = await db.from("allowed_users").select("*").order("name");
+  if (error) return say("people-msg", error.message);
+  say("people-msg", "");
+  $("people-count").textContent = `${data.length} ${data.length === 1 ? "pessoa" : "pessoas"}`;
+  const tbody = $("people-list");
+  tbody.innerHTML = "";
+  for (const p of data) tbody.append(personRow(p));
+}
+
+function personRow(p) {
+  const tr = document.createElement("tr");
+  const isMe = p.email === me.email;
+  const save = async (patch) => {
+    const { error } = await db.from("allowed_users").update(patch).eq("email", p.email);
+    say("people-msg", error ? error.message : "Salvo.");
+    if (error) loadPeople();
+  };
+  const name = document.createElement("input");
+  name.value = p.name ?? "";
+  name.onchange = () => save({ name: name.value.trim() || null });
+  const fam = document.createElement("select");
+  fam.append(new Option("—", ""));
+  families.forEach((f) => fam.append(new Option(f.name, f.id, false, f.id === p.family_id)));
+  fam.onchange = () => save({ family_id: fam.value ? Number(fam.value) : null });
+  const flag = (field, disabled) => {
+    const c = document.createElement("input");
+    c.type = "checkbox"; c.checked = p[field]; c.disabled = disabled;
+    c.onchange = () => save({ [field]: c.checked });
+    return c;
+  };
+  const del = document.createElement("button");
+  del.className = "danger"; del.textContent = "✕"; del.title = isMe ? "Você não pode remover a si mesmo" : "Remover acesso";
+  del.disabled = isMe;
+  del.onclick = async () => {
+    if (!confirm(`Remover o acesso de ${p.name || p.email}?`)) return;
+    const { error } = await db.from("allowed_users").delete().eq("email", p.email);
+    if (error) say("people-msg", error.message); else loadPeople();
+  };
+  tr.append(td(name, "", "Nome"), td(p.email, "ro", "E-mail"), td(fam, "", "Família"),
+    td(flag("is_responsible", false), "chk", "Responsável"),
+    td(flag("is_admin", isMe), "chk", "Admin"), td(del));
+  return tr;
+}
+
+$("form-person").onsubmit = async (e) => {
+  e.preventDefault();
+  const { error } = await db.from("allowed_users").insert({
+    email: $("p-email").value.trim().toLowerCase(),
+    name: $("p-name").value.trim(),
+    family_id: Number($("p-family").value),
+    is_responsible: $("p-resp").checked,
+    is_admin: $("p-admin").checked,
+  });
+  if (error) return say("people-msg", error.code === "23505" ? "Esse e-mail já está cadastrado." : error.message);
+  e.target.reset();
+  loadPeople();
 };
 
 $("btn-google").onclick = () =>

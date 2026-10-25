@@ -119,6 +119,15 @@ button.danger:hover { background: #fde8e6; color: var(--danger); }
 .add { display: flex; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px dashed var(--border); }
 .add input:first-child { flex: 1; }
 .add input[type=number] { width: 100px; }
+.person-form { flex-wrap: wrap; align-items: center; }
+.person-form input:not([type=checkbox]) { flex: 1; min-width: 160px; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
+.check input, td.chk input { width: auto; padding: 0; accent-color: var(--primary); }
+th:nth-child(4), th:nth-child(5) { text-align: left; }
+.people-table th:last-child, .people-table td:last-child { width: 44px; }
+.people-table td:nth-child(3), .people-table th:nth-child(3) { width: 160px; }
+.people-table td.chk { text-align: center; width: 100px; }
+.people-table th:nth-child(4), .people-table th:nth-child(5) { text-align: center; }
 
 @media (max-width: 760px) {
   header { padding: 12px 16px; }
@@ -131,27 +140,41 @@ button.danger:hover { background: #fde8e6; color: var(--danger); }
   nav button.active { background: var(--primary-soft); }
   main { padding: 14px; }
   .toolbar h2 { font-size: 19px; }
-  table, tbody { display: block; width: 100%; }
-  thead { display: none; }
-  tr {
+  #inventory table, #inventory tbody { display: block; width: 100%; }
+  #inventory thead { display: none; }
+  #inventory tr {
     display: grid; grid-template-columns: 90px 1fr 36px; gap: 2px 6px; align-items: center;
     padding: 8px 4px 8px 8px; border-bottom: 1px solid var(--border);
   }
-  tr:last-child { border-bottom: 0; }
-  td, td:last-child, td:nth-child(3), th.num, td.num { display: block; width: auto; border: 0; text-align: left; padding: 0; }
-  td:nth-child(1) { grid-column: 1 / 3; grid-row: 1; font-weight: 600; }
-  td:nth-child(5) { grid-column: 3; grid-row: 1; }
-  td:nth-child(2) { grid-column: 1; grid-row: 2; }
-  td:nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
-  td:nth-child(4) { grid-column: 1 / 4; grid-row: 3; }
-  td.num input { text-align: left; }
-  td.ro { padding: 4px 6px; }
-  td:nth-child(2).ro::before { content: "Qtd: "; color: var(--muted); font-weight: 400; }
-  td:nth-child(4).ro:empty { display: none; }
-  td:nth-child(4) input { color: var(--muted); font-size: 14px; }
-  td:nth-child(4) input:placeholder-shown { border-color: var(--border); }
-  td.empty { grid-column: 1 / 4; text-align: center; }
-  tbody tr:hover { background: none; }
+  #inventory tr:last-child { border-bottom: 0; }
+  #inventory td, #inventory td:last-child, #inventory td:nth-child(3), #inventory td.num { display: block; width: auto; border: 0; text-align: left; padding: 0; }
+  #inventory td:nth-child(1) { grid-column: 1 / 3; grid-row: 1; font-weight: 600; }
+  #inventory td:nth-child(5) { grid-column: 3; grid-row: 1; }
+  #inventory td:nth-child(2) { grid-column: 1; grid-row: 2; }
+  #inventory td:nth-child(3) { grid-column: 2 / 4; grid-row: 2; }
+  #inventory td:nth-child(4) { grid-column: 1 / 4; grid-row: 3; }
+  #inventory td.num input { text-align: left; }
+  #inventory td.ro { padding: 4px 6px; }
+  #inventory td:nth-child(2).ro::before { content: "Qtd: "; color: var(--muted); font-weight: 400; }
+  #inventory td:nth-child(4).ro:empty { display: none; }
+  #inventory td:nth-child(4) input { color: var(--muted); font-size: 14px; }
+  #inventory td.empty { grid-column: 1 / 4; text-align: center; }
+  #inventory tbody tr:hover { background: none; }
+
+  .people-table, .people-table tbody { display: block; width: 100%; }
+  .people-table thead { display: none; }
+  .people-table tr {
+    display: grid; grid-template-columns: 1fr auto auto 36px; gap: 4px 10px; align-items: center;
+    padding: 8px 4px; border-bottom: 1px solid var(--border);
+  }
+  .people-table td, .people-table td:last-child { display: block; width: auto; border: 0; padding: 0; text-align: left; }
+  .people-table td:nth-child(1) { grid-column: 1 / 4; font-weight: 600; }
+  .people-table td:nth-child(6) { grid-column: 4; grid-row: 1; }
+  .people-table td:nth-child(2) { grid-column: 1 / 5; color: var(--muted); font-size: 14px; padding: 0 8px; }
+  .people-table td:nth-child(3) { grid-column: 1; }
+  .people-table td.chk::before { content: attr(data-label) " "; font-size: 12px; color: var(--muted); }
+  .person-form input, .person-form select, .person-form button { flex-basis: 100%; }
+  .person-form .check { flex-basis: auto; }
   .add { flex-wrap: wrap; }
   .add input:first-child { flex-basis: 100%; }
   .add input[type=number] { flex: 1; }
