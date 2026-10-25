@@ -346,8 +346,23 @@ const canManage = (r) => me.is_admin || r.created_by === me.email;
 
 let agMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let monthRes = [];
+let agRoom = null;
+
+function renderRoomChips() {
+  const box = $("ag-rooms");
+  box.innerHTML = "";
+  for (const room of reservableRooms()) {
+    const b = document.createElement("button");
+    b.className = "chip" + (room.id === agRoom ? " active" : "");
+    b.textContent = room.name;
+    b.onclick = () => { agRoom = room.id; renderRoomChips(); renderGantt(); renderResList(); };
+    box.append(b);
+  }
+}
 
 async function showAgenda() {
+  if (!reservableRooms().some((r) => r.id === agRoom)) agRoom = reservableRooms()[0]?.id ?? null;
+  renderRoomChips();
   current = null;
   setView("agenda");
   setActive((b) => b.id === "nav-agenda");
@@ -397,7 +412,7 @@ function renderGantt() {
     const dow = new Date(y, m, d).toLocaleDateString("pt-BR", { weekday: "narrow" });
     put(div("g-head", `${d}\n${dow}`), `${2 * d} / span 2`, 1);
   }
-  reservableRooms().forEach((room, i) => {
+  reservableRooms().filter((r) => r.id === agRoom).forEach((room, i) => {
     const row = i + 2;
     put(div("g-room", room.name), 1, row);
     for (let d = 1; d <= days; d++) {
@@ -435,11 +450,12 @@ function reservationTotal(r) {
 function renderResList() {
   const box = $("res-list");
   box.innerHTML = "";
-  if (!monthRes.length) {
+  const list = monthRes.filter((r) => r.space_id === agRoom);
+  if (!list.length) {
     box.innerHTML = '<p class="empty">Nenhuma reserva neste mês.</p>';
     return;
   }
-  for (const r of monthRes) {
+  for (const r of list) {
     const room = spaces.find((s) => s.id === r.space_id);
     const nights = nightsBetween(r.check_in, r.check_out);
     const card = document.createElement("div");
@@ -476,7 +492,7 @@ function renderResList() {
 
 $("ag-prev").onclick = () => { agMonth = new Date(agMonth.getFullYear(), agMonth.getMonth() - 1, 1); loadMonth(); };
 $("ag-next").onclick = () => { agMonth = new Date(agMonth.getFullYear(), agMonth.getMonth() + 1, 1); loadMonth(); };
-$("ag-new").onclick = () => openReservation(null);
+$("ag-new").onclick = () => openReservation(null, { space_id: agRoom });
 
 // ---- Formulário de reserva ----
 let editing = null;
