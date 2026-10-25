@@ -19,6 +19,14 @@ Execute [supabase/phase2a.sql](supabase/phase2a.sql) no SQL Editor. Cria reserva
 ## Quartos pessoais e aprovações (Fase 2, etapa B)
 Depois, execute [supabase/phase2b.sql](supabase/phase2b.sql). Reservas em quartos pessoais ficam pendentes (sem bloquear datas) até o responsável da família ou um administrador aprovar. Em caso de conflito com uma reserva confirmada, só um administrador pode substituí-la.
 
+## Cobrança e backup
+Rode [supabase/phase2c.sql](supabase/phase2c.sql) (marcar como pago) e [supabase/phase2d.sql](supabase/phase2d.sql) (backup). A tela **Cobrança** e o botão **Baixar backup** (em Pessoas) são só para administradores. Guarde o JSON em local privado: ele contém e-mails.
+
+### Restaurar um backup
+Abra o projeto no VS Code com o Copilot e envie o prompt abaixo, anexando o arquivo `backup-casa-de-praia-*.json`:
+
+> Restaure o backup anexado no Supabase do projeto floripa-admin. Gere um script SQL para o SQL Editor, na ordem: families, spaces, allowed_users, items, settings, reservations, reservation_guests, guest_charges. Use `insert ... on conflict (chave primária) do update` para não duplicar e preservar os ids originais. Depois ajuste as sequences (`setval`) de todas as tabelas com id serial. Não apague nada existente sem eu confirmar. Antes de gerar, me diga quantas linhas há em cada tabela do arquivo.
+
 ## Hospedagem gratuita
 Publique a pasta em Cloudflare Pages, Netlify ou GitHub Pages (sem build).
 
