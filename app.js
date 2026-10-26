@@ -754,8 +754,8 @@ function renderFinance() {
 
 function renderFinanceDetails() {
   const period = fnPeriod();
-  $("fn-month-label").textContent = new Date(fnYear, fnMonth, 1)
-    .toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  $("fn-month-label").textContent = ` — ${new Date(fnYear, fnMonth, 1)
+    .toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}`;
   $("fn-membership-rate-year").textContent = String(fnYear);
   $("fn-membership-rate").value = fnMembershipRate == null ? "" : fnMembershipRate.toFixed(2);
   if (!fnEditingTransaction) $("fn-date").value = period;
