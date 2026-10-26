@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guia – Casa de Praia</title>
+<style>
+  :root { --p:#0e7c86; --pd:#0a5c64; --soft:#e3f4f5; --text:#1f2933; --muted:#52606d; --warn:#fff4d6; --ok:#dff5e3; --bad:#fde4e1; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#cfd8dc; font-family:"Segoe UI",Arial,sans-serif; color:var(--text); }
+  .slide { width:1080px; height:1350px; margin:0 auto 24px; background:#fff; padding:56px 72px 40px; position:relative; overflow:hidden; display:flex; flex-direction:column; gap:20px; }
+  .slide::before { content:""; position:absolute; left:0; right:0; top:0; height:18px; background:var(--p); }
+  .num { font-size:30px; font-weight:700; color:var(--p); letter-spacing:1px; margin-top:8px; }
+  h1 { font-size:76px; line-height:1.1; margin:0; color:var(--pd); }
+  p { font-size:40px; line-height:1.35; margin:0; }
+  .big { font-size:46px; }
+  .muted { color:var(--muted); }
+  .box { border-radius:28px; padding:28px 34px; font-size:38px; line-height:1.35; }
+  .tip { background:var(--warn); } .okb { background:var(--ok); } .soft { background:var(--soft); }
+  .steps { display:flex; flex-direction:column; gap:16px; }
+  .step { display:flex; align-items:center; gap:26px; font-size:42px; line-height:1.25; }
+  .step b.n { flex:none; width:80px; height:80px; border-radius:50%; background:var(--p); color:#fff; display:grid; place-items:center; font-size:40px; }
+  .phone { border:6px solid #1f2933; border-radius:40px; background:#f6f7f9; padding:26px; font-size:32px; box-shadow:0 10px 30px rgba(0,0,0,.18); }
+  .phone .title { font-weight:700; font-size:36px; color:var(--pd); margin-bottom:14px; }
+  .btn { display:inline-block; background:var(--p); color:#fff; border-radius:16px; padding:16px 30px; font-weight:700; font-size:34px; }
+  .input { background:#fff; border:3px solid #cbd2d9; border-radius:14px; padding:14px 20px; color:#7b8794; font-size:32px; margin:10px 0 16px; }
+  .mark { outline:6px solid #e53935; outline-offset:6px; }
+  .cal { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; text-align:center; font-size:28px; }
+  .cal span { padding:10px 0; border-radius:8px; background:#fff; }
+  .cal .h { background:none; font-weight:700; color:var(--muted); }
+  .cal .a { background:#9ad4d9; } .cal .b { background:#f6b26b; }
+  .legend { display:flex; gap:30px; font-size:32px; flex-wrap:wrap; }
+  .dot { display:inline-block; width:30px; height:30px; border-radius:8px; vertical-align:middle; margin-right:10px; }
+  .row { display:flex; justify-content:space-between; align-items:center; background:#fff; border-radius:14px; padding:14px 20px; margin-bottom:10px; font-size:32px; }
+  .tag { padding:4px 16px; border-radius:20px; font-weight:700; font-size:28px; }
+  .g { background:var(--ok); color:#1b6b2c; } .y { background:var(--warn); color:#8a6100; } .r { background:var(--bad); color:#b0281c; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  .card { background:#fff; border:3px solid var(--soft); border-radius:24px; padding:22px 26px; font-size:34px; line-height:1.3; }
+  .card b { color:var(--pd); display:block; font-size:38px; margin-bottom:4px; }
+  .price { text-align:center; border-radius:28px; padding:30px 20px; }
+  .price strong { display:block; font-size:92px; color:var(--pd); line-height:1; }
+  .price span { font-size:38px; }
+  .hide { display:none !important; }
+</style>
+</head>
+<body>
+
+<section class="slide" id="s1" style="justify-content:center;align-items:center;text-align:center;background:linear-gradient(#e3f4f5,#fff)">
+  <div style="font-size:200px">🏖️</div>
+  <h1>Casa de Praia</h1>
+  <p class="big">Guia rápido do nosso sistema</p>
+  <div class="box soft" style="margin-top:30px;text-align:left">
+    <p>Aqui você vai ver, <b>passo a passo</b>, como:</p>
+    <p>✔ Entrar no sistema<br>✔ Ver quem vai estar na casa<br>✔ Fazer uma reserva<br>✔ Entender os valores<br>✔ Ver o que tem em cada quarto</p>
+  </div>
+  <p class="muted" style="font-size:34px;margin-top:20px">Funciona no celular e no computador.<br>Não precisa instalar nada.</p>
+</section>
+
+<section class="slide" id="s2">
+  <div class="num">PASSO 1 DE 5</div>
+  <h1>Como entrar</h1>
+  <div class="phone">
+    <div class="title">🏖️ Casa de Praia</div>
+    <div style="font-size:30px;margin-bottom:8px">Entre para ver o inventário.</div>
+    <div class="input mark">seu e-mail</div>
+    <span class="btn">Receber link por e-mail</span>
+  </div>
+  <div class="steps">
+    <div class="step"><b class="n">1</b><span>Abra o endereço do sistema (link enviado no grupo).</span></div>
+    <div class="step"><b class="n">2</b><span>Digite o <b>mesmo e-mail</b> que você passou para nós.</span></div>
+    <div class="step"><b class="n">3</b><span>Toque em <b>Receber link por e-mail</b>.</span></div>
+    <div class="step"><b class="n">4</b><span>Abra seu e-mail e toque no link. Pronto!</span></div>
+  </div>
+  <div class="box tip" style="font-size:34px">💡 Não precisa de senha. Se não chegar, olhe também a caixa de <b>spam</b>.</div>
+</section>
+
+<section class="slide" id="s3">
+  <div class="num">PASSO 2 DE 5</div>
+  <h1>Agenda: quem vai estar na casa?</h1>
+  <div class="phone">
+    <div class="title">Agenda &nbsp; ‹ Novembro ›</div>
+    <div class="cal">
+      <span class="h">D</span><span class="h">S</span><span class="h">T</span><span class="h">Q</span><span class="h">Q</span><span class="h">S</span><span class="h">S</span>
+      <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span>
+      <span>8</span><span class="a">9</span><span class="a">10</span><span class="a">11</span><span class="a">12</span><span>13</span><span>14</span>
+      <span>15</span><span>16</span><span class="b">17</span><span class="b">18</span><span class="b">19</span><span class="b">20</span><span>21</span>
+    </div>
+    <div class="legend" style="margin-top:16px"><span><i class="dot" style="background:#9ad4d9"></i>Família A</span><span><i class="dot" style="background:#f6b26b"></i>Família B</span></div>
+  </div>
+  <p>As <b>barras coloridas</b> mostram os dias em que o quarto está ocupado.</p>
+  <div class="steps">
+    <div class="step"><b class="n">‹ ›</b><span>Use as setas para trocar de mês.</span></div>
+    <div class="step"><b class="n">🛏</b><span>Escolha o quarto que quer olhar.</span></div>
+  </div>
+  <div class="box okb">✅ Dia livre = pode reservar. Todos veem a agenda.</div>
+</section>
+
+<section class="slide" id="s4">
+  <div class="num">PASSO 3 DE 5</div>
+  <h1>Como fazer uma reserva</h1>
+  <div class="phone">
+    <div class="title">Nova reserva</div>
+    <div class="input">Quarto: Quarto 1 &nbsp;|&nbsp; Entrada: 09/11 &nbsp;|&nbsp; Saída: 12/11</div>
+    <div class="input">Pessoas: Maria (sócio), João (convidado)</div>
+    <span class="btn mark">Salvar</span>
+  </div>
+  <div class="steps">
+    <div class="step"><b class="n">1</b><span>Na Agenda, toque em <b>Nova reserva</b>.</span></div>
+    <div class="step"><b class="n">2</b><span>Escolha o quarto e as datas.</span></div>
+    <div class="step"><b class="n">3</b><span>Adicione <b>todas as pessoas</b> que vão ficar.</span></div>
+    <div class="step"><b class="n">4</b><span>Toque em <b>Salvar</b>.</span></div>
+  </div>
+  <div class="grid2">
+    <div class="box okb" style="font-size:32px"><b>Quartos 1, 2 e 3</b><br>Confirmam na hora, se estiverem livres.</div>
+    <div class="box tip" style="font-size:32px"><b>Quarto de uma família</b><br>Fica “pendente” até o responsável aprovar.</div>
+  </div>
+</section>
+
+<section class="slide" id="s5">
+  <div class="num">PASSO 4 DE 5</div>
+  <h1>Quanto custa?</h1>
+  <p>O valor é <b>por pessoa, por noite</b>.</p>
+  <div class="grid2">
+    <div class="price okb"><span>Sócio</span><strong>R$ 30</strong><span>por noite</span></div>
+    <div class="price tip"><span>Convidado</span><strong>R$ 50</strong><span>por noite</span></div>
+  </div>
+  <div class="box soft">
+    <b>Exemplo:</b><br>
+    2 sócios + 1 convidado, 3 noites<br>
+    (2 × R$ 30 + 1 × R$ 50) × 3 = <b>R$ 330</b>
+  </div>
+  <div class="box tip">🌙 Conta-se a <b>noite dormida</b>. A noite do dia da saída <b>não</b> conta.</div>
+  <div class="box okb">O sistema calcula tudo sozinho. Você só informa as pessoas.</div>
+  <p class="muted" style="font-size:32px">Quem for isento (sem cobrança) é marcado pelo administrador.</p>
+</section>
+
+<section class="slide" id="s6">
+  <div class="num">PASSO 5 DE 5</div>
+  <h1>O que tem em cada quarto?</h1>
+  <div class="phone">
+    <div class="title">Quarto 1</div>
+    <div class="row"><span>Cama de casal</span><span class="tag g">bom</span></div>
+    <div class="row"><span>Ventilador</span><span class="tag y">reparo</span></div>
+    <div class="row"><span>Cortina</span><span class="tag r">inutilizável</span></div>
+  </div>
+  <p>É a <b>lista de itens</b> da casa, separada por cômodo, com a quantidade e o estado de cada um.</p>
+  <div class="legend">
+    <span><i class="dot" style="background:#9be0a8"></i>bom</span>
+    <span><i class="dot" style="background:#f3d27a"></i>precisa de reparo</span>
+    <span><i class="dot" style="background:#f0a39b"></i>não dá mais</span>
+  </div>
+  <div class="steps">
+    <div class="step"><b class="n">1</b><span>Escolha o cômodo no menu.</span></div>
+    <div class="step"><b class="n">2</b><span>Veja os itens. Cada família edita o <b>próprio quarto</b>.</span></div>
+  </div>
+</section>
+
+<section class="slide" id="s7">
+  <div class="num">EXTRA</div>
+  <h1>Área dos administradores</h1>
+  <p>Apenas quem administra vê estas telas:</p>
+  <div class="grid2">
+    <div class="card"><b>👥 Pessoas</b>Quem pode entrar no sistema.</div>
+    <div class="card"><b>💲 Valores</b>Preço do sócio e do convidado.</div>
+    <div class="card"><b>🧾 Cobrança</b>Quem deve e quem já pagou.</div>
+    <div class="card"><b>📊 Financeiro</b>Receitas, despesas e mensalidades.</div>
+    <div class="card"><b>🕘 Histórico</b>Registro de tudo que foi mudado.</div>
+    <div class="card"><b>💾 Backup</b>Cópia de segurança dos dados.</div>
+  </div>
+  <div class="box soft">Não consegue entrar ou não aparece algo? Fale com um administrador.</div>
+</section>
+
+<section class="slide" id="s8" style="justify-content:center;text-align:center">
+  <div style="font-size:160px">🙋</div>
+  <h1>Ficou com dúvida?</h1>
+  <p class="big">Responda aqui no grupo.<br>Vamos ajudar com calma!</p>
+  <div class="box tip" style="text-align:left;margin-top:30px">
+    <b>Lembre-se:</b><br>
+    1. Entre com o e-mail cadastrado<br>
+    2. Veja a Agenda antes de reservar<br>
+    3. Informe todas as pessoas da reserva
+  </div>
+</section>
+
+<script>
+  const s = new URLSearchParams(location.search).get('s');
+  if (s) {
+    document.querySelectorAll('.slide').forEach(e => { e.classList.toggle('hide', e.id !== 's' + s); e.style.margin = '0'; });
+    document.body.style.background = '#fff';
+  }
+</script>
+</body>
+</html>
