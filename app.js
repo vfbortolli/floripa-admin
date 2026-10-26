@@ -8,8 +8,9 @@ let me = null;
 let spaces = [];
 let families = [];
 let people = [];
-let rates = { socio: 30, convidado: 50 };
+let rates = {};
 let current = null;
+let myReservationIds = new Set();
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
 const say = (id, text) => { $(id).textContent = text || ""; };
@@ -19,6 +20,10 @@ const setActive = (match) =>
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", match(b)));
 
 async function init() {
+  me = null;
+  people = [];
+  rates = {};
+  myReservationIds = new Set();
   const { data: { session } } = await db.auth.getSession();
   if (!session) return showLogin();
   const email = session.user.email.toLowerCase();
@@ -423,7 +428,7 @@ async function loadBilling() {
   const y = blMonth.getFullYear(), m = blMonth.getMonth();
   $("bl-label").textContent = blMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const { data, error } = await db.from("reservations")
-    .select("id, space_id, check_in, check_out, reservation_guests(id, name, user_email, type, exempt, guest_charges(rate, paid))")
+    .select("id, space_id, check_in, check_out, reservation_guests(id, name, type, exempt, guest_charges(rate, paid))")
     .eq("status", "confirmed").eq("kind", "stay")
     .gte("check_in", fmtDate(new Date(y, m, 1)))
     .lt("check_in", fmtDate(new Date(y, m + 1, 1)))
@@ -437,7 +442,7 @@ async function loadBilling() {
       const c = Array.isArray(g.guest_charges) ? g.guest_charges[0] : g.guest_charges;
       if (g.exempt || !c) continue;
       blRows.push({
-        guestId: g.id, who: g.user_email ? personName(g.user_email) : g.name, type: g.type,
+        guestId: g.id, who: g.name, type: g.type,
         room: roomById(r.space_id)?.name ?? "?", check_in: r.check_in, check_out: r.check_out,
         nights, rate: Number(c.rate), amount: Number(c.rate) * nights, paid: !!c.paid,
       });
@@ -554,7 +559,7 @@ const TYPES = { socio: "Sócio", convidado: "Convidado" };
 const reservableRooms = () => spaces.filter((s) => s.reservable);
 const roomById = (id) => spaces.find((s) => s.id === id);
 const canApprove = (room) => !!room && room.kind === "personal" && (me.is_admin || canEdit(room));
-const canManage = (r) => me.is_admin || r.created_by === me.email;
+const canManage = (r) => me.is_admin || myReservationIds.has(r.id);
 const autoConfirm = (room) => room.kind === "common" || me.is_admin || canEdit(room);
 const statusFor = (room, existing) =>
   room.kind === "common" ? "confirmed" : existing?.status === "pending" ? "pending" : autoConfirm(room) ? "confirmed" : "pending";
@@ -589,17 +594,28 @@ async function showAgenda() {
   current = null;
   setView("agenda");
   setActive((b) => b.id === "nav-agenda");
+  if (!(await loadMyReservationIds())) return;
   await Promise.all([loadMonth(), loadPending()]);
+}
+
+async function loadMyReservationIds() {
+  const { data, error } = await db.rpc("my_reservation_ids");
+  if (error) {
+    say("agenda-msg", error.message);
+    return false;
+  }
+  myReservationIds = new Set((data ?? []).map((row) => row.id));
+  return true;
 }
 
 async function loadPending() {
   const { data, error } = await db.from("reservations")
-    .select("*, reservation_guests(*, guest_charges(rate))")
+    .select("id, space_id, check_in, check_out, kind, status, note, created_at, created_by_name, reservation_guests(id, reservation_id, name, type, exempt, guest_charges(rate))")
     .in("status", ["pending", "rejected"])
     .gte("check_out", fmtDate(new Date()))
     .order("check_in");
   if (error) return say("agenda-msg", error.message);
-  pendingRes = data.filter((r) => r.status === "pending" || r.created_by === me.email);
+  pendingRes = data.filter((r) => r.status === "pending" || myReservationIds.has(r.id));
   const todo = pendingRes.filter((r) => r.status === "pending" && canApprove(roomById(r.space_id))).length;
   $("nav-agenda").textContent = "📅 Agenda" + (todo ? ` (${todo})` : "");
   renderRoomChips();
@@ -624,7 +640,7 @@ function renderPendingList() {
     head.append(title, tag);
     const body = document.createElement("div");
     body.className = "res-body";
-    body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${personName(r.created_by)}`;
+    body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${r.created_by_name || "Pessoa cadastrada"}`;
     card.append(head, body);
     card.onclick = () => openReservation(r);
     box.append(card);
@@ -640,7 +656,7 @@ async function loadMonth() {
   const y = agMonth.getFullYear(), m = agMonth.getMonth();
   $("ag-label").textContent = agMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
   const { data, error } = await db.from("reservations")
-    .select("*, reservation_guests(*, guest_charges(rate))")
+    .select("id, space_id, check_in, check_out, kind, status, note, created_at, created_by_name, reservation_guests(id, reservation_id, name, type, exempt, guest_charges(rate))")
     .eq("status", "confirmed")
     .lt("check_in", fmtDate(new Date(y, m + 1, 1)))
     .gt("check_out", fmtDate(new Date(y, m, 1)))
@@ -655,7 +671,7 @@ async function loadMonth() {
 function barLabel(r) {
   if (r.kind === "block") return "Aluguel";
   const names = r.reservation_guests.map((g) => g.name.split(" ")[0]);
-  return names.length ? names.join(", ") : personName(r.created_by);
+  return names.length ? names.join(", ") : r.created_by_name || "Reserva";
 }
 
 function renderGantt() {
@@ -697,7 +713,7 @@ function renderGantt() {
       const s = inD < wsDate ? 1 : 2 * nightsBetween(fmtDate(wsDate), r.check_in) + 2;
       const e = outD >= weekEnd ? 15 : 2 * nightsBetween(fmtDate(wsDate), r.check_out) + 2;
       if (e <= s) continue;
-      const bar = div("bar" + (r.kind === "block" ? " block" : "") + (r.created_by === me.email ? " mine" : "") + (inD < wsDate ? " cont-l" : "") + (outD >= weekEnd ? " cont-r" : ""), barLabel(r));
+      const bar = div("bar" + (r.kind === "block" ? " block" : "") + (myReservationIds.has(r.id) ? " mine" : "") + (inD < wsDate ? " cont-l" : "") + (outD >= weekEnd ? " cont-r" : ""), barLabel(r));
       bar.title = `${barLabel(r)} (${brDate(r.check_in)} → ${brDate(r.check_out)})`;
       bar.onclick = (ev) => { ev.stopPropagation(); openReservation(r); };
       bar.style.gridColumn = `${s} / ${e}`;
@@ -746,7 +762,7 @@ function renderResList() {
     body.className = "res-body";
     if (r.kind === "block") body.textContent = "Aluguel por plataforma" + (r.note ? ` – ${r.note}` : "");
     else {
-      body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${personName(r.created_by)}`;
+      body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${r.created_by_name || "Pessoa cadastrada"}`;
       if (canManage(r)) {
         const t = reservationTotal(r);
         if (t != null) {
@@ -800,7 +816,7 @@ function openReservation(r, preset = {}) {
   show("r-approve", !!r && r.status === "pending" && canApprove(room0));
   show("r-reject", !!r && r.status === "pending" && canApprove(room0));
   formGuests = (r?.reservation_guests ?? []).map((g) => ({
-    id: g.id, name: g.name, user_email: g.user_email, type: g.type, exempt: g.exempt, rate: chargeRate(g),
+    id: g.id, name: g.name, type: g.type, exempt: g.exempt, rate: chargeRate(g),
   }));
   $("people-names").innerHTML = "";
   people.forEach((p) => $("people-names").append(new Option(p.name)));
@@ -859,7 +875,9 @@ function refreshForm() {
   for (const g of formGuests) {
     if (g.exempt) continue;
     const stored = g.id && g.rate != null && !(editing && g.type !== editing.reservation_guests.find((x) => x.id === g.id)?.type);
-    total += (stored ? g.rate : rates[g.type]) * nights;
+    const rate = stored ? g.rate : rates[g.type];
+    if (rate == null) return say("r-total", "");
+    total += rate * nights;
     if (!stored) estimated = true;
   }
   say("r-total", `Total: ${money(total)}${estimated ? " (valores atuais)" : ""}`);
@@ -870,7 +888,7 @@ function addGuest() {
   if (!name) return;
   const person = people.find((p) => p.name?.toLowerCase() === name.toLowerCase());
   formGuests.push({
-    name: person?.name ?? name, user_email: person?.email ?? null,
+    name: person?.name ?? name,
     type: $("g-type").value, exempt: $("g-exempt").checked,
   });
   $("g-name").value = "";
@@ -901,7 +919,10 @@ $("r-delete").onclick = async () => {
   loadAll();
 };
 
-const loadAll = () => Promise.all([loadMonth(), loadPending()]);
+const loadAll = async () => {
+  if (!(await loadMyReservationIds())) return;
+  await Promise.all([loadMonth(), loadPending()]);
+};
 
 async function resolveReservation(approve) {
   const id = editing.id;
@@ -952,7 +973,7 @@ $("res-form").onsubmit = async (e) => {
     }
     const guests = block ? [] : formGuests;
     const fresh = guests.filter((g) => !g.id).map((g) => ({
-      reservation_id: id, name: g.name, user_email: g.user_email, type: g.type, exempt: g.exempt,
+      reservation_id: id, name: g.name, type: g.type, exempt: g.exempt,
     }));
     if (fresh.length) {
       const { error } = await db.from("reservation_guests").insert(fresh);

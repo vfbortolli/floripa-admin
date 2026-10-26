@@ -17,6 +17,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 | `app.js` | Toda a lógica do cliente (ver mapa abaixo). |
 | `style.css` | Design (variáveis, componentes, calendário, `@media (max-width: 760px)` para celular). |
 | `config.js` | URL e chave publishable do Supabase. |
+| `supabase/phase2f.sql` | Restringe a leitura de e-mails e tarifas; executar após `phase2e.sql`. |
 | `supabase/schema.sql` | Fase 1: tabelas, funções de permissão, policies, seed. |
 | `supabase/phase2a.sql` … `phase2e.sql` | Migrações incrementais, **rodadas manualmente no SQL Editor, em ordem**. Idempotentes. |
 | `quarto-bortolli.csv` | Inventário do Quarto Bortolli (34 itens, já importado). |
@@ -58,6 +59,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - Cobrança: `showBilling`, `loadBilling`, `renderBilling`, export CSV. Histórico: `showHistory`, `loadHistory`, `hsText`.
 
 ## Convenções e armadilhas
+- Execute a `phase2f.sql` após `phase2e.sql` antes de publicar a versão de `app.js` que usa as permissões de privacidade atualizadas.
 - Datas como `YYYY-MM-DD`; usar `parseDate`/`fmtDate` (evitam bug de fuso). Valores em BRL via `money()`.
 - Texto vindo do banco entra com `textContent` (nunca `innerHTML`).
 - Mudou o banco? Criar novo `supabase/phaseX.sql` idempotente e avisar o usuário para rodá-lo; **não publicar JS que dependa de SQL ainda não executado sem avisar**.

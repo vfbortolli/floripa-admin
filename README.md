@@ -22,6 +22,11 @@ Depois, execute [supabase/phase2b.sql](supabase/phase2b.sql). Reservas em quarto
 ## Cobrança e backup
 Rode [supabase/phase2c.sql](supabase/phase2c.sql) (marcar como pago) e [supabase/phase2d.sql](supabase/phase2d.sql) (backup). A tela **Cobrança** e o botão **Baixar backup** (em Pessoas) são só para administradores. Guarde o JSON em local privado: ele contém e-mails.
 
+## Privacidade de e-mails e tarifas
+Execute [supabase/phase2e.sql](supabase/phase2e.sql) (histórico) e depois [supabase/phase2f.sql](supabase/phase2f.sql). A migração limita a RPC de pessoas para que cada usuário veja apenas o próprio e-mail (administradores veem todos), remove e-mails de criadores e participantes das leituras disponíveis ao navegador, e restringe a leitura das tarifas aos administradores. Agenda e inventário continuam visíveis a todos os cadastrados; os valores de cobranças seguem visíveis somente ao dono da reserva e aos administradores.
+
+Esta migração deve ser aplicada no Supabase antes de publicar a versão atualizada do `app.js`, pois a interface passa a usar a nova RPC e as colunas permitidas. O esquema e os nomes das tabelas ainda podem ser inspecionados publicamente; a proteção dos dados depende das policies e privilégios do banco.
+
 ### Restaurar um backup
 Abra o projeto no VS Code com o Copilot e envie o prompt abaixo, anexando o arquivo `backup-casa-de-praia-*.json`:
 
