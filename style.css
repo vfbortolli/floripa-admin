@@ -66,17 +66,22 @@ nav {
   width: 220px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 10px; position: sticky; top: 16px;
 }
-nav h3 {
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
-  color: var(--muted); margin: 14px 10px 6px;
-}
-nav h3:first-child { margin-top: 4px; }
-nav button {
-  display: block; width: 100%; text-align: left; background: none; color: var(--text);
+nav .nav-item, nav .nav-group-toggle {
+  display: flex; align-items: center; width: 100%; text-align: left; background: none; color: var(--text);
   font-weight: 500; padding: 8px 10px; border-radius: 8px;
 }
-nav button:hover { background: var(--bg); }
-nav button.active { background: var(--primary-soft); color: var(--primary-dark); font-weight: 700; }
+nav .nav-item:hover, nav .nav-group-toggle:hover { background: var(--bg); }
+nav .nav-item.active { background: var(--primary-soft); color: var(--primary-dark); font-weight: 700; }
+nav .nav-agenda { gap: 8px; margin-bottom: 6px; }
+nav .nav-group { margin-top: 4px; }
+nav .nav-group-toggle { gap: 9px; color: var(--muted); font-size: 13px; }
+nav .nav-group.has-active > .nav-group-toggle { color: var(--primary-dark); font-weight: 700; }
+nav .nav-icon { width: 20px; text-align: center; font-size: 16px; }
+nav .nav-chevron { margin-left: auto; font-size: 16px; transition: transform .15s; }
+nav .nav-group-toggle[aria-expanded="true"] .nav-chevron { transform: rotate(180deg); }
+nav .nav-group-items { padding-left: 8px; }
+nav .nav-group-items .nav-item { font-size: 14px; }
+nav button:focus-visible { outline-offset: -2px; }
 
 main {
   flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--border);
@@ -137,11 +142,9 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
   header { padding: 12px 16px; }
   .layout { flex-direction: column; padding: 12px; gap: 12px; align-items: stretch; }
   nav {
-    width: 100%; position: static; display: flex; gap: 6px; overflow-x: auto; padding: 8px;
+    width: 100%; position: static; display: block; overflow: visible; padding: 8px;
   }
-  nav h3 { display: none; }
-  nav button { width: auto; white-space: nowrap; background: var(--bg); }
-  nav button.active { background: var(--primary-soft); }
+  nav .nav-item, nav .nav-group-toggle { white-space: nowrap; }
   main { padding: 14px; }
   .toolbar h2 { font-size: 19px; }
   #inventory table, #inventory tbody { display: block; width: 100%; }
