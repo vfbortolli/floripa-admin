@@ -14,7 +14,7 @@ let myReservationIds = new Set();
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
 const say = (id, text) => { $(id).textContent = text || ""; };
-const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "history"];
+const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "finance", "history"];
 const setView = (name) => VIEWS.forEach((v) => show(v, v === name));
 const setActive = (match) => {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", match(b)));
@@ -151,7 +151,13 @@ function renderNav() {
     bl.textContent = "Cobrança";
     bl.id = "nav-billing";
     bl.onclick = showBilling;
+    const fn = document.createElement("button");
+    fn.className = "nav-item";
+    fn.textContent = "Financeiro";
+    fn.id = "nav-finance";
+    fn.onclick = showFinance;
     items.append(peopleBtn, bl, rt);
+    items.append(fn);
     const hs = document.createElement("button");
     hs.className = "nav-item";
     hs.textContent = "Histórico";
@@ -400,17 +406,23 @@ let hsRows = [];
 const HS_TABLES = {
   items: "Item", reservations: "Reserva", reservation_guests: "Pessoa da reserva",
   allowed_users: "Pessoa", settings: "Valor", guest_charges: "Cobrança",
+  finance_categories: "Categoria financeira", finance_memberships: "Mensalidade",
+  finance_membership_rates: "Valor anual da mensalidade",
+  finance_transactions: "Lançamento financeiro", finance_daily_adjustments: "Ajuste de diárias",
 };
 const HS_FIELDS = {
   description: "descrição", quantity: "quantidade", condition: "estado", notes: "observações",
   space_id: "quarto", check_in: "entrada", check_out: "saída", kind: "tipo", status: "situação", note: "observação",
   name: "nome", type: "tipo", exempt: "isento", is_admin: "admin", is_responsible: "responsável",
   family_id: "família", value: "valor", paid: "pago", user_email: "e-mail", rate: "valor/noite",
+  active: "ativa", period_month: "mês", year: "ano", expected_amount: "previsto", received_amount: "recebido",
+  paid_at: "data do pagamento", category_id: "categoria", transaction_date: "data", amount: "valor",
 };
 const HS_VALUES = {
   bom: "Bom", reparo: "Precisa de reparo", inutilizavel: "Inutilizável",
   socio: "Sócio", convidado: "Convidado", confirmed: "Confirmada", pending: "Pendente", rejected: "Recusada",
   stay: "Estadia", block: "Bloqueio",
+  income: "Receita", expense: "Despesa",
 };
 
 function hsValue(field, v) {
@@ -580,6 +592,414 @@ $("bl-csv").onclick = () => {
   a.download = `cobranca-${fmtDate(blMonth).slice(0, 7)}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
+};
+
+// ---- Financeiro ----
+let fnYear = new Date().getFullYear();
+let fnMonth = new Date().getMonth();
+let fnCategories = [];
+let fnMemberships = [];
+let fnMembershipRate = null;
+let fnTransactions = [];
+let fnDaily = [];
+let fnDailyAdjustments = [];
+let fnEditingTransaction = null;
+const fnAnnualExpanded = { income: false, expense: false };
+
+const fnPeriod = () => `${fnYear}-${String(fnMonth + 1).padStart(2, "0")}-01`;
+const fnMonthKey = (value) => String(value).slice(0, 7);
+async function showFinance() {
+  if (!me?.is_admin) return;
+  current = null;
+  setView("finance");
+  setActive((b) => b.id === "nav-finance");
+  $("fn-date").value = fnPeriod();
+  await loadFinance();
+}
+
+async function loadFinance() {
+  const start = `${fnYear}-01-01`, end = `${fnYear + 1}-01-01`;
+  $("fn-year").value = fnYear;
+  say("fn-msg", "");
+  const [categories, memberships, membershipRate, transactions, daily, adjustments] = await Promise.all([
+    db.from("finance_categories").select("*").order("kind").order("name"),
+    db.from("finance_memberships").select("*").gte("period_month", start).lt("period_month", end),
+    db.from("finance_membership_rates").select("amount").eq("year", fnYear).maybeSingle(),
+    db.from("finance_transactions").select("*").gte("transaction_date", start).lt("transaction_date", end).order("transaction_date"),
+    db.rpc("get_finance_daily", { p_year: fnYear }),
+    db.from("finance_daily_adjustments").select("*").gte("period_month", start).lt("period_month", end),
+  ]);
+  const failed = [categories, memberships, membershipRate, transactions, daily, adjustments].find((result) => result.error);
+  if (failed) return say("fn-msg", failed.error.message);
+  fnCategories = categories.data ?? [];
+  fnMemberships = memberships.data ?? [];
+  fnMembershipRate = membershipRate.data ? Number(membershipRate.data.amount) : null;
+  fnTransactions = transactions.data ?? [];
+  fnDaily = daily.data ?? [];
+  fnDailyAdjustments = adjustments.data ?? [];
+  updateFinanceCategoryOptions();
+  renderFinance();
+  renderFinanceCategories();
+}
+
+function fnMonthlyData(monthIndex) {
+  const monthKey = `${fnYear}-${String(monthIndex + 1).padStart(2, "0")}`;
+  return {
+    memberships: new Map(fnMemberships.filter((r) => fnMonthKey(r.period_month) === monthKey)
+      .map((r) => [Number(r.family_id), r])),
+    daily: fnDaily.filter((r) => fnMonthKey(r.period_month) === monthKey)
+      .reduce((map, r) => map.set(Number(r.family_id), (map.get(Number(r.family_id)) ?? 0) + Number(r.amount)), new Map()),
+    adjustments: new Map(fnDailyAdjustments.filter((r) => fnMonthKey(r.period_month) === monthKey)
+      .map((r) => [Number(r.family_id), r])),
+    categoryTotals: fnTransactions.filter((r) => fnMonthKey(r.transaction_date) === monthKey)
+      .reduce((map, r) => map.set(String(r.category_id), (map.get(String(r.category_id)) ?? 0) + Number(r.amount)), new Map()),
+  };
+}
+
+function fnDailyTotal(data) {
+  return families.reduce((sum, family) =>
+    sum + Number(data.adjustments.get(family.id)?.amount ?? data.daily.get(family.id) ?? 0), 0);
+}
+
+function renderFinance() {
+  const head = $("fn-annual-head"), body = $("fn-annual-body");
+  head.innerHTML = ""; body.innerHTML = "";
+  const header = document.createElement("tr");
+  const year = document.createElement("th");
+  year.textContent = String(fnYear);
+  header.append(year);
+  for (let i = 0; i < 12; i++) {
+    const th = document.createElement("th");
+    const button = document.createElement("button");
+    const monthName = new Date(fnYear, i, 1).toLocaleDateString("pt-BR", { month: "long" });
+    button.type = "button"; button.className = "finance-month-link"; button.textContent = monthName;
+    button.setAttribute("aria-label", `Ver detalhes de ${monthName}`);
+    button.onclick = () => { fnMonth = i; renderFinanceDetails(); };
+    th.append(button); header.append(th);
+  }
+  head.append(header);
+
+  const monthly = Array.from({ length: 12 }, (_, i) => fnMonthlyData(i));
+  const usedCategories = new Set(fnTransactions.map((r) => String(r.category_id)));
+  const categories = fnCategories.filter((c) => c.active || usedCategories.has(String(c.id)));
+  const incomeCategories = categories.filter((c) => c.kind === "income");
+  const expenseCategories = categories.filter((c) => c.kind === "expense");
+  const amount = (data, category) => data.categoryTotals.get(String(category.id)) ?? 0;
+  const memberships = (data) => [...data.memberships.values()]
+    .reduce((sum, row) => sum + Number(row.received_amount), 0);
+  const otherIncome = (data) => incomeCategories.reduce((sum, category) => sum + amount(data, category), 0);
+  const expenses = (data) => expenseCategories.reduce((sum, category) => sum + amount(data, category), 0);
+  const addRow = (title, getAmount, className = "", group = null) => {
+    const tr = document.createElement("tr");
+    if (className) tr.className = className;
+    if (group) {
+      tr.dataset.financeGroup = group;
+      tr.hidden = !fnAnnualExpanded[group];
+    }
+    const th = document.createElement("th");
+    th.scope = "row"; th.textContent = title; tr.append(th);
+    for (const data of monthly) {
+      const td = document.createElement("td");
+      td.className = "num"; td.textContent = money(getAmount(data)); tr.append(td);
+    }
+    body.append(tr);
+  };
+
+  const addGroupTotal = (title, group, getAmount) => {
+    const tr = document.createElement("tr");
+    tr.className = "finance-total finance-group-total";
+    const th = document.createElement("th");
+    th.scope = "row";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "finance-group-toggle";
+    button.setAttribute("aria-expanded", String(fnAnnualExpanded[group]));
+    const label = document.createElement("span");
+    label.textContent = title;
+    const indicator = document.createElement("span");
+    indicator.className = "finance-chevron";
+    indicator.setAttribute("aria-hidden", "true");
+    indicator.textContent = fnAnnualExpanded[group] ? "▾" : "▸";
+    button.append(label, indicator);
+    button.onclick = () => {
+      fnAnnualExpanded[group] = !fnAnnualExpanded[group];
+      const expanded = fnAnnualExpanded[group];
+      button.setAttribute("aria-expanded", String(expanded));
+      indicator.textContent = expanded ? "▾" : "▸";
+      body.querySelectorAll(`[data-finance-group="${group}"]`).forEach((row) => { row.hidden = !expanded; });
+    };
+    th.append(button);
+    tr.append(th);
+    for (const data of monthly) {
+      const td = document.createElement("td");
+      td.className = "num"; td.textContent = money(getAmount(data)); tr.append(td);
+    }
+    body.append(tr);
+  };
+
+  addGroupTotal("Total de receitas", "income",
+    (data) => memberships(data) + fnDailyTotal(data) + otherIncome(data));
+  addRow("Mensalidades", memberships, "", "income");
+  addRow("Diárias", fnDailyTotal, "", "income");
+  for (const category of incomeCategories) {
+    addRow(category.name, (data) => amount(data, category), "", "income");
+  }
+  addGroupTotal("Total de despesas", "expense", expenses);
+  for (const category of expenseCategories) {
+    addRow(category.name, (data) => amount(data, category), "", "expense");
+  }
+  addRow("Balanço", (data) => memberships(data) + fnDailyTotal(data) + otherIncome(data) - expenses(data), "finance-balance");
+  renderFinanceDetails();
+}
+
+function renderFinanceDetails() {
+  const period = fnPeriod();
+  $("fn-month-label").textContent = new Date(fnYear, fnMonth, 1)
+    .toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  $("fn-membership-rate-year").textContent = String(fnYear);
+  $("fn-membership-rate").value = fnMembershipRate == null ? "" : fnMembershipRate.toFixed(2);
+  if (!fnEditingTransaction) $("fn-date").value = period;
+  const data = fnMonthlyData(fnMonth);
+  renderFinanceMemberships(data, period);
+  renderFinanceDaily(data, period);
+  renderFinanceTransactions();
+}
+
+function renderFinanceMemberships(data, period) {
+  const membershipRows = $("fn-memberships");
+  membershipRows.innerHTML = "";
+  for (const family of families) {
+    const saved = data.memberships.get(family.id);
+    const expectedAmount = fnMembershipRate ?? Number(saved?.expected_amount ?? 0);
+    const row = document.createElement("tr");
+    const name = document.createElement("th");
+    name.scope = "row"; name.textContent = family.name; row.append(name);
+    const inputs = [];
+    const expected = document.createElement("td");
+    expected.className = "num";
+    expected.textContent = money(expectedAmount);
+    row.append(expected);
+    for (const [value, label] of [
+      [saved?.received_amount ?? "0", `Recebido de ${family.name}`],
+      [saved?.paid_at ?? "", `Data do pagamento de ${family.name}`],
+    ]) {
+      const cell = document.createElement("td");
+      const input = document.createElement("input");
+      input.type = label.startsWith("Data") ? "date" : "number";
+      if (input.type === "number") { input.min = "0"; input.step = "0.01"; }
+      input.value = value; input.setAttribute("aria-label", label);
+      inputs.push(input); cell.append(input); row.append(cell);
+    }
+    const paid = expectedAmount > 0 && Number(saved?.received_amount ?? 0) >= expectedAmount;
+    const status = document.createElement("td");
+    status.className = paid ? "finance-paid" : "finance-pending";
+    status.textContent = paid ? "Pago" : "Pendente"; row.append(status);
+    const action = document.createElement("td");
+    const save = document.createElement("button");
+    save.type = "button"; save.className = "secondary"; save.textContent = "Salvar";
+    save.onclick = async () => {
+      if (inputs[0].value === "" || !Number.isFinite(Number(inputs[0].value)) || Number(inputs[0].value) < 0) {
+        say("fn-msg", "Informe um valor recebido válido (zero ou maior).");
+        return;
+      }
+      save.disabled = true;
+      const { error } = await db.from("finance_memberships").upsert({
+        family_id: family.id, period_month: period,
+        expected_amount: expectedAmount, received_amount: Number(inputs[0].value),
+        paid_at: inputs[1].value || null,
+      }, { onConflict: "family_id,period_month" });
+      if (error) { say("fn-msg", error.message); save.disabled = false; return; }
+      await loadFinance();
+    };
+    action.append(save); row.append(action); membershipRows.append(row);
+  }
+}
+
+$("fn-membership-rate-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const amount = Number($("fn-membership-rate").value);
+  if (!Number.isFinite(amount) || amount < 0) {
+    say("fn-msg", "Informe uma mensalidade válida (zero ou maior).");
+    return;
+  }
+  const { error } = await db.from("finance_membership_rates").upsert(
+    { year: fnYear, amount }, { onConflict: "year" },
+  );
+  if (error) return say("fn-msg", error.message);
+  await loadFinance();
+};
+
+function renderFinanceDaily(data, period) {
+  const dailyRows = $("fn-daily");
+  dailyRows.innerHTML = "";
+  for (const family of families) {
+    const imported = data.daily.get(family.id) ?? 0;
+    const adjustment = data.adjustments.get(family.id);
+    const row = document.createElement("tr");
+    const name = document.createElement("th");
+    name.scope = "row"; name.textContent = family.name; row.append(name);
+    const source = document.createElement("td");
+    source.className = "num"; source.textContent = money(imported); row.append(source);
+    const finalAmount = document.createElement("td");
+    finalAmount.className = "num"; finalAmount.textContent = money(adjustment?.amount ?? imported);
+    row.append(finalAmount);
+    const action = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "number"; input.min = "0"; input.step = "0.01"; input.placeholder = "Sem ajuste";
+    input.value = adjustment ? adjustment.amount : "";
+    input.setAttribute("aria-label", `Ajuste de diárias para ${family.name}`);
+    const save = document.createElement("button");
+    save.type = "button"; save.className = "secondary"; save.textContent = "Salvar";
+    save.onclick = async () => {
+      if (input.value !== "" && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0)) {
+        say("fn-msg", "O ajuste precisa ser zero ou maior.");
+        return;
+      }
+      save.disabled = true;
+      const result = input.value === ""
+        ? await db.from("finance_daily_adjustments").delete().eq("family_id", family.id).eq("period_month", period)
+        : await db.from("finance_daily_adjustments").upsert({
+          family_id: family.id, period_month: period, amount: Number(input.value),
+        }, { onConflict: "family_id,period_month" });
+      if (result.error) { say("fn-msg", result.error.message); save.disabled = false; return; }
+      await loadFinance();
+    };
+    action.append(input, save); row.append(action); dailyRows.append(row);
+  }
+}
+
+function updateFinanceCategoryOptions() {
+  const kind = $("fn-kind").value, select = $("fn-category");
+  select.innerHTML = "";
+  const editingCategoryId = fnTransactions.find((row) => row.id === fnEditingTransaction)?.category_id;
+  for (const category of fnCategories.filter((c) =>
+    c.kind === kind && (c.active || String(c.id) === String(editingCategoryId)))) {
+    const option = document.createElement("option");
+    option.value = category.id; option.textContent = category.name; select.append(option);
+  }
+  $("fn-transaction-save").disabled = select.options.length === 0;
+}
+
+function renderFinanceTransactions() {
+  const period = fnPeriod(), list = $("fn-transactions");
+  list.innerHTML = "";
+  const categoryMap = new Map(fnCategories.map((c) => [String(c.id), c]));
+  const rows = fnTransactions.filter((r) => fnMonthKey(r.transaction_date) === period.slice(0, 7));
+  for (const transaction of rows) {
+    const row = document.createElement("tr"), category = categoryMap.get(String(transaction.category_id));
+    for (const value of [
+      new Date(`${transaction.transaction_date}T12:00:00`).toLocaleDateString("pt-BR"),
+      transaction.kind === "income" ? "Receita" : "Despesa",
+      category?.name ?? "Categoria removida", transaction.description, money(Number(transaction.amount)),
+    ]) {
+      const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
+    }
+    const actions = document.createElement("td");
+    const edit = document.createElement("button");
+    edit.type = "button"; edit.className = "link"; edit.textContent = "Editar";
+    edit.onclick = () => {
+      fnEditingTransaction = transaction.id;
+      $("fn-kind").value = transaction.kind; updateFinanceCategoryOptions();
+      $("fn-date").value = transaction.transaction_date;
+      $("fn-category").value = transaction.category_id;
+      $("fn-description").value = transaction.description; $("fn-amount").value = transaction.amount;
+      $("fn-transaction-save").textContent = "Salvar";
+      show("fn-transaction-cancel", true); $("fn-description").focus();
+    };
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.className = "danger-text"; remove.textContent = "Excluir";
+    remove.onclick = async () => {
+      if (!confirm("Excluir este lançamento financeiro?")) return;
+      const { error } = await db.from("finance_transactions").delete().eq("id", transaction.id);
+      if (error) return say("fn-msg", error.message);
+      await loadFinance();
+    };
+    actions.append(edit, remove); row.append(actions); list.append(row);
+  }
+  if (!rows.length) {
+    const row = document.createElement("tr"), cell = document.createElement("td");
+    cell.colSpan = 6; cell.className = "empty"; cell.textContent = "Nenhum lançamento neste mês.";
+    row.append(cell); list.append(row);
+  }
+}
+
+function renderFinanceCategories() {
+  const box = $("fn-categories");
+  box.innerHTML = "";
+  for (const category of fnCategories) {
+    const row = document.createElement("div");
+    row.className = "finance-category";
+    const label = document.createElement("span");
+    label.textContent = `${category.kind === "income" ? "Receita" : "Despesa"} · ${category.name}${category.active ? "" : " (inativa)"}`;
+    const rename = document.createElement("button");
+    rename.type = "button"; rename.className = "secondary"; rename.textContent = "Renomear";
+    rename.onclick = async () => {
+      const name = prompt("Novo nome da categoria:", category.name)?.trim();
+      if (!name || name === category.name) return;
+      const { error } = await db.from("finance_categories").update({ name }).eq("id", category.id);
+      if (error) return say("fn-msg", error.message);
+      await loadFinance();
+    };
+    const toggle = document.createElement("button");
+    toggle.type = "button"; toggle.className = "secondary";
+    toggle.textContent = category.active ? "Desativar" : "Ativar";
+    toggle.onclick = async () => {
+      const { error } = await db.from("finance_categories").update({ active: !category.active }).eq("id", category.id);
+      if (error) return say("fn-msg", error.message);
+      await loadFinance();
+    };
+    row.append(label, rename, toggle); box.append(row);
+  }
+}
+
+$("fn-load").onclick = async () => {
+  const year = Number($("fn-year").value);
+  if (!Number.isInteger(year) || year < 1900 || year > 9998) return say("fn-msg", "Informe um ano entre 1900 e 9998.");
+  fnYear = year;
+  await loadFinance();
+};
+$("fn-prev").onclick = async () => {
+  if (fnYear === 1900 && fnMonth === 0) return;
+  if (fnMonth === 0) { fnMonth = 11; fnYear--; } else fnMonth--;
+  await loadFinance();
+};
+$("fn-next").onclick = async () => {
+  if (fnYear === 9998 && fnMonth === 11) return;
+  if (fnMonth === 11) { fnMonth = 0; fnYear++; } else fnMonth++;
+  await loadFinance();
+};
+$("fn-kind").onchange = updateFinanceCategoryOptions;
+$("fn-transaction-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const payload = {
+    kind: $("fn-kind").value, category_id: Number($("fn-category").value),
+    transaction_date: $("fn-date").value, description: $("fn-description").value.trim(),
+    amount: Number($("fn-amount").value),
+  };
+  const query = fnEditingTransaction
+    ? db.from("finance_transactions").update(payload).eq("id", fnEditingTransaction)
+    : db.from("finance_transactions").insert(payload);
+  const { error } = await query;
+  if (error) return say("fn-msg", error.message);
+  fnEditingTransaction = null;
+  $("fn-transaction-form").reset();
+  $("fn-transaction-save").textContent = "Adicionar"; show("fn-transaction-cancel", false);
+  $("fn-date").value = fnPeriod(); updateFinanceCategoryOptions();
+  await loadFinance();
+};
+$("fn-transaction-cancel").onclick = () => {
+  fnEditingTransaction = null; $("fn-transaction-form").reset();
+  $("fn-transaction-save").textContent = "Adicionar"; show("fn-transaction-cancel", false);
+  $("fn-date").value = fnPeriod(); updateFinanceCategoryOptions();
+};
+$("fn-category-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const { error } = await db.from("finance_categories").insert({
+    kind: $("fn-category-kind").value, name: $("fn-category-name").value.trim(),
+  });
+  if (error) return say("fn-msg", error.message);
+  $("fn-category-form").reset();
+  await loadFinance();
 };
 
 function showRates() {

@@ -27,10 +27,15 @@ Execute [supabase/phase2e.sql](supabase/phase2e.sql) (histórico) e depois [supa
 
 Esta migração deve ser aplicada no Supabase antes de publicar a versão atualizada do `app.js`, pois a interface passa a usar a nova RPC e as colunas permitidas. O esquema e os nomes das tabelas ainda podem ser inspecionados publicamente; a proteção dos dados depende das policies e privilégios do banco.
 
+## Financeiro
+Execute [supabase/phase2g.sql](supabase/phase2g.sql) depois de `phase2f.sql` e [supabase/phase2h.sql](supabase/phase2h.sql) depois de `phase2g.sql`, antes de usar a versão atualizada da área **Administração > Financeiro**. O módulo é exclusivo para administradores e oferece resumo anual recolhido nos totais de receitas, despesas e balanço (clique nos totais de receitas/despesas para abrir ou recolher os itens), mensalidades previstas/recebidas por família, receitas e despesas por lançamento e categorias editáveis.
+
+O valor previsto da mensalidade é definido uma vez por ano e vale para cada família em todos os meses daquele ano. A migração inicializa 2026 com R$ 300; outros anos podem ter um valor próprio informado na tela. O recebido e a data de pagamento continuam registrados por família e mês. As diárias são calculadas por noite a partir de reservas confirmadas e distribuídas por mês. A família é associada pelo e-mail ou nome cadastrado da pessoa, pelo quarto pessoal ou, quando esses dados não identificam uma família, pela família do responsável que criou a reserva. Um ajuste financeiro mensal substitui o total importado daquela família e não altera a reserva. O backup JSON inclui os valores anuais das mensalidades.
+
 ### Restaurar um backup
 Abra o projeto no VS Code com o Copilot e envie o prompt abaixo, anexando o arquivo `backup-casa-de-praia-*.json`:
 
-> Restaure o backup anexado no Supabase do projeto floripa-admin. Gere um script SQL para o SQL Editor, na ordem: families, spaces, allowed_users, items, settings, reservations, reservation_guests, guest_charges. Use `insert ... on conflict (chave primária) do update` para não duplicar e preservar os ids originais. Depois ajuste as sequences (`setval`) de todas as tabelas com id serial. Não apague nada existente sem eu confirmar. Antes de gerar, me diga quantas linhas há em cada tabela do arquivo.
+> Restaure o backup anexado no Supabase do projeto floripa-admin. Gere um script SQL para o SQL Editor, na ordem: families, spaces, allowed_users, items, settings, reservations, reservation_guests, guest_charges, finance_categories, finance_membership_rates, finance_memberships, finance_transactions, finance_daily_adjustments. Use `insert ... on conflict (chave primária) do update` para não duplicar e preservar os ids originais. Depois ajuste as sequences (`setval`) de todas as tabelas com id serial. Não apague nada existente sem eu confirmar. Antes de gerar, me diga quantas linhas há em cada tabela do arquivo.
 
 ## Hospedagem gratuita
 Publique a pasta em Cloudflare Pages, Netlify ou GitHub Pages (sem build).

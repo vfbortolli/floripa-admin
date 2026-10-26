@@ -51,7 +51,7 @@
         </form>
         <p id="people-msg" class="msg"></p>
         <h3 class="sub">Backup</h3>
-        <p class="msg">Baixa uma cópia de todos os dados (inventário, pessoas, reservas e cobranças) em um arquivo JSON. Guarde-o em local privado: contém e-mails.</p>
+        <p class="msg">Baixa uma cópia de todos os dados (inventário, pessoas, reservas, cobranças e financeiro) em um arquivo JSON. Guarde-o em local privado: contém e-mails.</p>
         <button id="btn-backup" class="secondary">Baixar backup</button>
         <p id="backup-msg" class="msg"></p>
       </main>
@@ -86,6 +86,10 @@
             <option value="guest_charges">Cobranças</option>
             <option value="allowed_users">Pessoas cadastradas</option>
             <option value="settings">Valores</option>
+            <option value="finance_categories">Categorias financeiras</option>
+            <option value="finance_memberships">Mensalidades</option>
+            <option value="finance_transactions">Lançamentos financeiros</option>
+            <option value="finance_daily_adjustments">Ajustes de diárias</option>
           </select>
         </div>
         <div id="hs-list"></div>
@@ -106,6 +110,82 @@
         <div id="bl-totals" class="bl-totals"></div>
         <div id="bl-list"></div>
         <p id="bl-msg" class="msg"></p>
+      </main>
+      <main id="finance" class="hidden">
+        <div class="toolbar">
+          <h2>Financeiro</h2>
+          <label class="finance-year">Ano <input id="fn-year" type="number" min="1900" max="9998" step="1"></label>
+          <button id="fn-load" class="secondary">Consultar</button>
+        </div>
+        <p class="msg">Receitas e despesas da casa. Diárias calculadas a partir das reservas confirmadas e distribuídas pelas noites de cada mês.</p>
+        <div class="finance-table-wrap finance-annual-wrap">
+          <table id="fn-annual-table" class="finance-table finance-annual-table">
+            <thead id="fn-annual-head"></thead>
+            <tbody id="fn-annual-body"></tbody>
+          </table>
+        </div>
+        <p id="fn-msg" class="msg"></p>
+        <h3 class="sub">Detalhe do mês</h3>
+        <div class="toolbar finance-month-toolbar">
+          <button id="fn-prev" class="secondary" aria-label="Mês anterior">‹</button>
+          <b id="fn-month-label"></b>
+          <button id="fn-next" class="secondary" aria-label="Próximo mês">›</button>
+        </div>
+
+        <h3 class="sub">Mensalidades por família</h3>
+        <form id="fn-membership-rate-form" class="add finance-form">
+          <label>Mensalidade padrão em <span id="fn-membership-rate-year"></span>
+            <input id="fn-membership-rate" type="number" min="0" step="0.01" required aria-label="Mensalidade padrão do ano">
+          </label>
+          <button type="submit">Salvar valor do ano</button>
+        </form>
+        <p class="msg">O previsto vale para todas as famílias e meses do ano. Recebido e data são informados por família e mês.</p>
+        <div class="finance-table-wrap">
+          <table class="finance-table">
+            <thead><tr><th>Família</th><th>Previsto</th><th>Recebido</th><th>Data do pagamento</th><th>Status</th><th></th></tr></thead>
+            <tbody id="fn-memberships"></tbody>
+          </table>
+        </div>
+
+        <h3 class="sub">Diárias por família</h3>
+        <p class="msg">O valor importado é somente leitura. Ajustes substituem o total financeiro da família no mês e não alteram as reservas.</p>
+        <div class="finance-table-wrap">
+          <table class="finance-table">
+            <thead><tr><th>Família</th><th>Importado das reservas</th><th>Valor no financeiro</th><th>Ajuste</th></tr></thead>
+            <tbody id="fn-daily"></tbody>
+          </table>
+        </div>
+
+        <h3 class="sub">Outras receitas e despesas</h3>
+        <form id="fn-transaction-form" class="add finance-form">
+          <select id="fn-kind" aria-label="Tipo">
+            <option value="income">Outra receita</option>
+            <option value="expense">Despesa</option>
+          </select>
+          <input id="fn-date" type="date" required aria-label="Data">
+          <select id="fn-category" required aria-label="Categoria"></select>
+          <input id="fn-description" placeholder="Descrição" required>
+          <input id="fn-amount" type="number" min="0.01" step="0.01" placeholder="Valor" required>
+          <button id="fn-transaction-save" type="submit">Adicionar</button>
+          <button id="fn-transaction-cancel" class="secondary hidden" type="button">Cancelar edição</button>
+        </form>
+        <div class="finance-table-wrap">
+          <table class="finance-table">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th></th></tr></thead>
+            <tbody id="fn-transactions"></tbody>
+          </table>
+        </div>
+
+        <h3 class="sub">Categorias</h3>
+        <form id="fn-category-form" class="add finance-form">
+          <select id="fn-category-kind" aria-label="Tipo da categoria">
+            <option value="income">Receita</option>
+            <option value="expense">Despesa</option>
+          </select>
+          <input id="fn-category-name" placeholder="Nome da categoria" required>
+          <button type="submit">Adicionar categoria</button>
+        </form>
+        <div id="fn-categories" class="finance-categories"></div>
       </main>
       <main id="rates" class="hidden">
         <div class="toolbar"><h2>Valores</h2></div>
