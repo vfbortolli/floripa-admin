@@ -499,9 +499,9 @@ async function loadBilling() {
   const { data, error } = await db.from("reservations")
     .select("id, space_id, check_in, check_out, reservation_guests(id, name, type, exempt, guest_charges(rate, paid))")
     .eq("status", "confirmed").eq("kind", "stay")
-    .gte("check_in", fmtDate(new Date(y, m, 1)))
-    .lt("check_in", fmtDate(new Date(y, m + 1, 1)))
-    .order("check_in");
+    .gte("check_out", fmtDate(new Date(y, m, 1)))
+    .lt("check_out", fmtDate(new Date(y, m + 1, 1)))
+    .order("check_out");
   if (error) return say("bl-msg", error.message);
   say("bl-msg", "");
   blRows = [];
