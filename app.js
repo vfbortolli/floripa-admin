@@ -1751,6 +1751,9 @@ function refreshForm() {
     $("r-status").textContent = "Este é um quarto pessoal: a reserva só vale depois de aprovada pelo responsável ou por um administrador.";
     show("r-status", true);
   } else if (!editing) show("r-status", false);
+  const isPersonalRoom = room && room.kind === "personal";
+  $("r-block").disabled = isPersonalRoom;
+  if (isPersonalRoom) $("r-block").checked = false;
   const block = $("r-block").checked;
   show("r-guests-wrap", !block);
   const nights = $("r-in").value && $("r-out").value ? nightsBetween($("r-in").value, $("r-out").value) : 0;
@@ -1866,6 +1869,7 @@ $("res-form").onsubmit = async (e) => {
   if (nightsBetween(check_in, check_out) <= 0) return say("r-msg", "A saída deve ser depois da entrada.");
   if (!block && !formGuests.length) return say("r-msg", "Adicione ao menos uma pessoa.");
   const room = roomById(Number($("r-space").value));
+  if (block && room.kind === "personal") return say("r-msg", "Quartos pessoais não podem ter reservas por plataforma.");
   const payload = {
     space_id: room.id, check_in, check_out,
     kind: block ? "block" : "stay", note: $("r-note").value.trim() || null, status: statusFor(room, editing),
