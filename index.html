@@ -39,12 +39,13 @@
           <span id="people-count" class="count"></span>
         </div>
         <table class="people-table">
-          <thead><tr><th>Nome</th><th>E-mail</th><th>Família</th><th>Responsável</th><th>Admin</th><th></th></tr></thead>
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Telefone</th><th>Família</th><th>Responsável</th><th>Admin</th><th></th></tr></thead>
           <tbody id="people-list"></tbody>
         </table>
         <form id="form-person" class="add person-form">
           <input id="p-name" placeholder="Nome" required>
           <input id="p-email" type="email" placeholder="E-mail (o mesmo do login)" required>
+          <input id="p-phone" type="tel" placeholder="Telefone (55 11 99999-9999)">
           <select id="p-family" required></select>
           <label class="check"><input type="checkbox" id="p-resp"> Responsável</label>
           <label class="check"><input type="checkbox" id="p-admin"> Admin</label>

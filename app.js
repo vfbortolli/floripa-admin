@@ -451,7 +451,10 @@ function personRow(p) {
     const { error } = await db.from("allowed_users").delete().eq("email", p.email);
     if (error) say("people-msg", error.message); else loadPeople();
   };
-  tr.append(td(name, "", "Nome"), td(p.email, "ro", "E-mail"), td(fam, "", "Família"),
+  const phone = document.createElement("input");
+  phone.type = "tel"; phone.value = p.phone ?? "";
+  phone.onchange = () => save({ phone: phone.value.trim() || null });
+  tr.append(td(name, "", "Nome"), td(p.email, "ro", "E-mail"), td(phone, "", "Telefone"), td(fam, "", "Família"),
     td(flag("is_responsible", false), "chk", "Responsável"),
     td(flag("is_admin", isMe), "chk", "Admin"), td(del));
   return tr;
@@ -462,6 +465,7 @@ $("form-person").onsubmit = async (e) => {
   const { error } = await db.from("allowed_users").insert({
     email: $("p-email").value.trim().toLowerCase(),
     name: $("p-name").value.trim(),
+    phone: $("p-phone").value.trim() || null,
     family_id: Number($("p-family").value),
     is_responsible: $("p-resp").checked,
     is_admin: $("p-admin").checked,
@@ -1644,6 +1648,37 @@ let formGuests = [];
 let removedIds = [];
 let readOnly = false;
 
+async function notifyResponsibleViaWhatsapp(reservationId, room, checkIn, checkOut) {
+  try {
+    // Find the family responsible for this personal room
+    const family = families.find((f) => f.id === room.family_id);
+    if (!family) return;
+
+    // Find all responsible people for this family with phone numbers
+    const responsibles = people.filter((p) => p.family_id === family.id && p.is_responsible && p.phone);
+    if (!responsibles.length) return;
+
+    // Get guest names
+    const guestNames = formGuests.map((g) => g.name).join(", ");
+
+    // Send notification to each responsible person
+    for (const responsible of responsibles) {
+      const { error } = await db.rpc("send_whatsapp_notification", {
+        p_reservation_id: reservationId,
+        p_recipient_phone: responsible.phone,
+        p_guest_names: guestNames,
+        p_space_name: room.name,
+        p_check_in: checkIn,
+        p_check_out: checkOut,
+      });
+      if (error) console.error("Erro ao notificar via WhatsApp:", error);
+    }
+  } catch (err) {
+    console.error("Erro ao enviar notificação WhatsApp:", err);
+  }
+}
+
+
 function openReservation(r, preset = {}) {
   editing = r;
   readOnly = !!r && !canManage(r);
@@ -1841,6 +1876,12 @@ $("res-form").onsubmit = async (e) => {
       if (error) throw error;
     }
     $("res-dialog").close();
+    
+    // If reservation is new and pending in a personal room, send WhatsApp notification to responsible
+    if (!editing && payload.status === "pending" && room.kind === "personal") {
+      await notifyResponsibleViaWhatsapp(id, room, check_in, check_out);
+    }
+    
     loadAll();
   } catch (err) {
     say("r-msg", err.code === "23P01"
