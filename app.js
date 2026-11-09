@@ -10,11 +10,19 @@ let families = [];
 let people = [];
 let rates = {};
 let current = null;
+let inventoryItems = [];
 let myReservationIds = new Set();
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
 const say = (id, text) => { $(id).textContent = text || ""; };
-const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "finance", "history"];
+const PAYMENT_PROOFS_BUCKET = "payment-proofs";
+const PAYMENT_PROOF_TYPES = new Map([
+  ["application/pdf", "pdf"],
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+]);
+const PAYMENT_PROOF_MAX_SIZE = 10 * 1024 * 1024;
+const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "dashboard", "finance", "history"];
 const setView = (name) => VIEWS.forEach((v) => show(v, v === name));
 const setActive = (match) => {
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", match(b)));
@@ -51,6 +59,50 @@ async function init() {
   $("who").textContent = me.name || me.email;
   renderNav();
   showAgenda();
+}
+
+async function uploadPaymentProof(file) {
+  const extension = PAYMENT_PROOF_TYPES.get(file.type);
+  if (!extension) return { error: "Use um comprovante em PDF, JPG ou PNG." };
+  if (!file.size || file.size > PAYMENT_PROOF_MAX_SIZE) {
+    return { error: "O arquivo deve ter até 10 MB." };
+  }
+  const objectPath = `${crypto.randomUUID()}.${extension}`;
+  const { error: uploadError } = await db.storage.from(PAYMENT_PROOFS_BUCKET)
+    .upload(objectPath, file, { contentType: file.type, upsert: false });
+  if (uploadError) return { error: uploadError.message };
+
+  const originalName = file.name.replace(/[\\/\u0000-\u001f]/g, "_").slice(0, 120) || "comprovante";
+  const { data, error } = await db.from("payment_receipts")
+    .insert({ object_path: objectPath, original_name: originalName })
+    .select("id, object_path, original_name, uploaded_at")
+    .single();
+  if (error) {
+    const { error: cleanupError } = await db.storage.from(PAYMENT_PROOFS_BUCKET).remove([objectPath]);
+    return { error: cleanupError
+      ? `${error.message} O arquivo enviado não pôde ser removido do armazenamento: ${cleanupError.message}`
+      : error.message };
+  }
+  return { data };
+}
+
+async function cleanupUnlinkedPaymentProof(receipt) {
+  const { error: recordError } = await db.from("payment_receipts").delete().eq("id", receipt.id);
+  const { error: fileError } = await db.storage.from(PAYMENT_PROOFS_BUCKET).remove([receipt.object_path]);
+  return [recordError, fileError].filter(Boolean).map((error) => error.message);
+}
+
+async function openPaymentProof(receipt, messageId) {
+  const tab = window.open("about:blank", "_blank");
+  if (!tab) return say(messageId, "Permita abrir uma nova aba para visualizar o comprovante.");
+  tab.opener = null;
+  const { data, error } = await db.storage.from(PAYMENT_PROOFS_BUCKET)
+    .createSignedUrl(receipt.object_path, 60);
+  if (error) {
+    tab.close();
+    return say(messageId, error.message);
+  }
+  tab.location.href = data.signedUrl;
 }
 
 function showLogin() {
@@ -156,8 +208,13 @@ function renderNav() {
     fn.textContent = "Financeiro";
     fn.id = "nav-finance";
     fn.onclick = showFinance;
+    const dashboard = document.createElement("button");
+    dashboard.className = "nav-item";
+    dashboard.textContent = "Painel financeiro";
+    dashboard.id = "nav-dashboard";
+    dashboard.onclick = showFinanceDashboard;
     items.append(peopleBtn, bl, rt);
-    items.append(fn);
+    items.append(dashboard, fn);
     const hs = document.createElement("button");
     hs.className = "nav-item";
     hs.textContent = "Histórico";
@@ -169,6 +226,10 @@ function renderNav() {
 
 async function selectSpace(space) {
   current = space;
+  inventoryItems = [];
+  $("item-search").value = "";
+  $("items").replaceChildren();
+  $("item-count").textContent = "";
   setView("inventory");
   setActive((b) => Number(b.dataset.id) === space.id);
   $("space-title").textContent = space.name;
@@ -185,18 +246,34 @@ async function loadItems() {
   if (space !== current) return;
   if (error) return say("app-msg", error.message);
   say("app-msg", "");
-  const edit = canEdit(space);
+  inventoryItems = data;
+  renderItems();
+}
+
+function normalizeSearch(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function renderItems() {
+  const query = normalizeSearch($("item-search").value.trim());
+  const filteredItems = inventoryItems.filter((it) =>
+    normalizeSearch(`${it.description} ${it.notes} ${CONDITIONS[it.condition]}`).includes(query));
   const tbody = $("items");
   tbody.innerHTML = "";
-  $("item-count").textContent = `${data.length} ${data.length === 1 ? "item" : "itens"}`;
-  if (!data.length) {
+  const count = filteredItems.length;
+  const total = inventoryItems.length;
+  $("item-count").textContent = count === total
+    ? `${count} ${count === 1 ? "item" : "itens"}`
+    : `${count} de ${total} ${total === 1 ? "item" : "itens"}`;
+  if (!filteredItems.length) {
     const tr = document.createElement("tr");
-    const c = td("Nenhum item cadastrado neste espaço.", "empty");
+    const message = total ? "Nenhum item encontrado." : "Nenhum item cadastrado neste espaço.";
+    const c = td(message, "empty");
     c.colSpan = 5;
     tr.append(c);
     tbody.append(tr);
   }
-  for (const it of data) tbody.append(edit ? editableRow(it) : readonlyRow(it));
+  for (const it of filteredItems) tbody.append(canEdit(current) ? editableRow(it) : readonlyRow(it));
 }
 
 function td(content, cls, label) {
@@ -221,7 +298,10 @@ function editableRow(it) {
   const tr = document.createElement("tr");
   const save = async (patch) => {
     const { error } = await db.from("items").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", it.id);
-    say("app-msg", error ? error.message : "Salvo.");
+    if (error) return say("app-msg", error.message);
+    Object.assign(it, patch);
+    say("app-msg", "Salvo.");
+    renderItems();
   };
   const text = (value, field, type = "text") => {
     const i = document.createElement("input");
@@ -270,6 +350,8 @@ $("form-add").onsubmit = async (e) => {
   e.target.reset();
   loadItems();
 };
+
+$("item-search").addEventListener("input", renderItems);
 
 // CSV simples: Descrição,Qtd (aceita ; ou , e aspas)
 function parseCsv(text) {
@@ -485,6 +567,7 @@ $("hs-more").onclick = loadHistory;
 // ---- Cobrança ----
 let blMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let blRows = [];
+let blSelected = new Set();
 
 async function showBilling() {
   current = null;
@@ -504,6 +587,7 @@ async function loadBilling() {
     .order("check_out");
   if (error) return say("bl-msg", error.message);
   say("bl-msg", "");
+  blSelected = new Set();
   blRows = [];
   for (const r of data) {
     const nights = nightsBetween(r.check_in, r.check_out);
@@ -513,8 +597,19 @@ async function loadBilling() {
       blRows.push({
         guestId: g.id, who: g.name, type: g.type,
         room: roomById(r.space_id)?.name ?? "?", check_in: r.check_in, check_out: r.check_out,
-        nights, rate: Number(c.rate), amount: Number(c.rate) * nights, paid: !!c.paid,
+        nights, rate: Number(c.rate), amount: Number(c.rate) * nights, paid: !!c.paid, receipts: [],
       });
+    }
+  }
+  if (blRows.length) {
+    const { data: receiptLinks, error: receiptError } = await db.from("payment_receipt_guest_charges")
+      .select("guest_id, payment_receipts(id, object_path, original_name, uploaded_at)")
+      .in("guest_id", blRows.map((r) => r.guestId));
+    if (receiptError) return say("bl-msg", receiptError.message);
+    for (const link of receiptLinks ?? []) {
+      const receipt = Array.isArray(link.payment_receipts) ? link.payment_receipts[0] : link.payment_receipts;
+      const row = blRows.find((r) => r.guestId === link.guest_id);
+      if (row && receipt) row.receipts.push(receipt);
     }
   }
   renderBilling();
@@ -541,15 +636,80 @@ function renderBilling() {
     box.innerHTML = '<p class="empty">Nenhuma cobrança neste mês.</p>';
     return;
   }
+  const proofTools = document.createElement("div");
+  proofTools.className = "bl-proof-tools";
+  const instructions = document.createElement("span");
+  instructions.textContent = "Selecione uma ou mais cobranças para anexar o comprovante da transferência e dar baixa em todas.";
+  const uploadLabel = document.createElement("label");
+  uploadLabel.className = "btn secondary";
+  uploadLabel.textContent = "Escolher comprovante";
+  const uploadInput = document.createElement("input");
+  uploadInput.type = "file";
+  uploadInput.accept = "application/pdf,image/jpeg,image/png";
+  uploadInput.hidden = true;
+  uploadLabel.append(uploadInput);
+  const applyProof = document.createElement("button");
+  applyProof.type = "button";
+  applyProof.textContent = "Anexar comprovante e dar baixa";
+  applyProof.disabled = true;
+  uploadInput.onchange = () => {
+    applyProof.disabled = !uploadInput.files?.length || !blSelected.size;
+  };
+  const updateSelection = () => {
+    applyProof.disabled = !uploadInput.files?.length || !blSelected.size;
+    const selectedRows = blRows.filter((r) => blSelected.has(r.guestId));
+    applyProof.textContent = selectedRows.some((r) => !r.paid)
+      ? "Anexar comprovante e dar baixa"
+      : "Anexar comprovante";
+  };
+  applyProof.onclick = async () => {
+    const file = uploadInput.files?.[0];
+    const selectedRows = blRows.filter((r) => blSelected.has(r.guestId));
+    if (!file || !selectedRows.length) return;
+    applyProof.disabled = true;
+    say("bl-msg", "Enviando comprovante…");
+    const { data: receipt, error: uploadError } = await uploadPaymentProof(file);
+    if (uploadError) {
+      say("bl-msg", uploadError);
+      updateSelection();
+      return;
+    }
+    const { error: linkError } = await db.from("payment_receipt_guest_charges").insert(
+      selectedRows.map((r) => ({ receipt_id: receipt.id, guest_id: r.guestId })),
+    );
+    if (linkError) {
+      const cleanupErrors = await cleanupUnlinkedPaymentProof(receipt);
+      say("bl-msg", [linkError.message, ...cleanupErrors].join(" "));
+      updateSelection();
+      return;
+    }
+    const unpaidRows = selectedRows.filter((r) => !r.paid);
+    if (unpaidRows.length) {
+      const { error: paidError } = await db.from("guest_charges").update({
+        paid: true, paid_at: new Date().toISOString(),
+      }).in("guest_id", unpaidRows.map((r) => r.guestId));
+      if (paidError) {
+        await loadBilling();
+        say("bl-msg", `Comprovante anexado, mas não foi possível dar baixa: ${paidError.message}`);
+        return;
+      }
+    }
+    uploadInput.value = "";
+    blSelected = new Set();
+    await loadBilling();
+  };
+  proofTools.append(instructions, uploadLabel, applyProof);
+  box.append(proofTools);
   const groups = new Map();
-  for (const r of blRows) groups.set(r.who, [...(groups.get(r.who) ?? []), r]);
-  for (const [who, rows] of [...groups].sort((a, b) => a[0].localeCompare(b[0], "pt-BR"))) {
+  for (const r of blRows) groups.set(r.room, [...(groups.get(r.room) ?? []), r]);
+  const sortedGroups = [...groups].sort((a, b) => a[0].localeCompare(b[0], "pt-BR", { numeric: true }));
+  for (const [room, rows] of sortedGroups) {
     const card = document.createElement("div");
     card.className = "res-card bl-card";
     const head = document.createElement("div");
     head.className = "res-head";
     const name = document.createElement("b");
-    name.textContent = who;
+    name.textContent = room;
     const open = sum(rows.filter((r) => !r.paid));
     const tag = document.createElement("span");
     tag.className = "tag " + (open ? "reparo" : "bom");
@@ -557,24 +717,45 @@ function renderBilling() {
     head.append(name, tag);
     card.append(head);
     for (const r of rows) {
-      const line = document.createElement("label");
+      const line = document.createElement("div");
       line.className = "bl-line";
-      const cb = document.createElement("input");
-      cb.type = "checkbox"; cb.checked = r.paid;
-      cb.onchange = async () => {
-        cb.disabled = true;
-        const { error } = await db.from("guest_charges")
-          .update({ paid: cb.checked, paid_at: cb.checked ? new Date().toISOString() : null }).eq("guest_id", r.guestId);
-        if (error) { say("bl-msg", error.message); cb.checked = !cb.checked; cb.disabled = false; return; }
-        r.paid = cb.checked;
-        renderBilling();
+      const select = document.createElement("input");
+      select.type = "checkbox";
+      select.checked = blSelected.has(r.guestId);
+      select.disabled = r.paid && r.receipts.length > 0;
+      select.setAttribute("aria-label", `Selecionar cobrança de ${r.who} para comprovante`);
+      select.title = "Selecionar para anexar comprovante";
+      select.onchange = () => {
+        if (select.checked) blSelected.add(r.guestId);
+        else blSelected.delete(r.guestId);
+        updateSelection();
       };
       const txt = document.createElement("span");
-      txt.textContent = `${r.room} · ${brDate(r.check_in)} → ${brDate(r.check_out)} · ${r.nights}×${money(r.rate)} (${TYPES[r.type]})`;
+      txt.textContent = `${r.who} · ${brDate(r.check_in)} → ${brDate(r.check_out)} · ${r.nights}×${money(r.rate)} (${TYPES[r.type]})${r.paid ? " · Pago" : " · Pendente"}`;
       const amt = document.createElement("b");
       amt.textContent = money(r.amount);
-      line.append(cb, txt, amt);
+      line.append(select, txt, amt);
       card.append(line);
+      if (r.receipts.length) {
+        const receiptList = document.createElement("div");
+        receiptList.className = "bl-receipts";
+        for (const receipt of r.receipts) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "secondary";
+          button.textContent = `Comprovante: ${receipt.original_name}`;
+          button.onclick = () => openPaymentProof(receipt, "bl-msg");
+          receiptList.append(button);
+        }
+        card.append(receiptList);
+      } else {
+        const noProof = document.createElement("small");
+        noProof.className = "bl-no-proof";
+        noProof.textContent = r.paid
+          ? "Pagamento já registrado antes da exigência de comprovante."
+          : "Selecione esta cobrança acima para anexar comprovante.";
+        card.append(noProof);
+      }
     }
     box.append(card);
   }
@@ -599,12 +780,12 @@ let fnYear = new Date().getFullYear();
 let fnMonth = new Date().getMonth();
 let fnCategories = [];
 let fnMemberships = [];
+let fnMembershipReceipts = new Map();
 let fnMembershipRate = null;
 let fnTransactions = [];
 let fnDaily = [];
 let fnDailyAdjustments = [];
 let fnEditingTransaction = null;
-const fnAnnualExpanded = { income: false, expense: false };
 
 const fnPeriod = () => `${fnYear}-${String(fnMonth + 1).padStart(2, "0")}-01`;
 const fnMonthKey = (value) => String(value).slice(0, 7);
@@ -617,10 +798,20 @@ async function showFinance() {
   await loadFinance();
 }
 
+async function showFinanceDashboard() {
+  if (!me?.is_admin) return;
+  current = null;
+  setView("dashboard");
+  setActive((b) => b.id === "nav-dashboard");
+  await loadFinance();
+}
+
 async function loadFinance() {
   const start = `${fnYear}-01-01`, end = `${fnYear + 1}-01-01`;
   $("fn-year").value = fnYear;
-  say("fn-msg", "");
+  $("fn-dashboard-year").value = fnYear;
+  $("fn-dashboard-year-label").textContent = String(fnYear);
+  say("fn-msg", ""); say("fn-dashboard-msg", "");
   const [categories, memberships, membershipRate, transactions, daily, adjustments] = await Promise.all([
     db.from("finance_categories").select("*").order("kind").order("name"),
     db.from("finance_memberships").select("*").gte("period_month", start).lt("period_month", end),
@@ -630,15 +821,35 @@ async function loadFinance() {
     db.from("finance_daily_adjustments").select("*").gte("period_month", start).lt("period_month", end),
   ]);
   const failed = [categories, memberships, membershipRate, transactions, daily, adjustments].find((result) => result.error);
-  if (failed) return say("fn-msg", failed.error.message);
+  if (failed) {
+    say("fn-msg", failed.error.message); say("fn-dashboard-msg", failed.error.message);
+    return;
+  }
   fnCategories = categories.data ?? [];
   fnMemberships = memberships.data ?? [];
+  fnMembershipReceipts = new Map();
+  if (fnMemberships.length) {
+    const { data: links, error: receiptError } = await db.from("payment_receipt_memberships")
+      .select("membership_id, payment_receipts(id, object_path, original_name, uploaded_at)")
+      .in("membership_id", fnMemberships.map((r) => r.id));
+    if (receiptError) {
+      say("fn-msg", receiptError.message); say("fn-dashboard-msg", receiptError.message);
+      return;
+    }
+    for (const link of links ?? []) {
+      const receipt = Array.isArray(link.payment_receipts) ? link.payment_receipts[0] : link.payment_receipts;
+      if (receipt) fnMembershipReceipts.set(link.membership_id, [
+        ...(fnMembershipReceipts.get(link.membership_id) ?? []), receipt,
+      ]);
+    }
+  }
   fnMembershipRate = membershipRate.data ? Number(membershipRate.data.amount) : null;
   fnTransactions = transactions.data ?? [];
   fnDaily = daily.data ?? [];
   fnDailyAdjustments = adjustments.data ?? [];
   updateFinanceCategoryOptions();
-  renderFinance();
+  renderFinanceDashboard();
+  renderFinanceDetails();
   renderFinanceCategories();
 }
 
@@ -661,95 +872,109 @@ function fnDailyTotal(data) {
     sum + Number(data.adjustments.get(family.id)?.amount ?? data.daily.get(family.id) ?? 0), 0);
 }
 
-function renderFinance() {
-  const head = $("fn-annual-head"), body = $("fn-annual-body");
-  head.innerHTML = ""; body.innerHTML = "";
-  const header = document.createElement("tr");
-  const year = document.createElement("th");
-  year.textContent = String(fnYear);
-  header.append(year);
-  for (let i = 0; i < 12; i++) {
-    const th = document.createElement("th");
-    const button = document.createElement("button");
-    const monthName = new Date(fnYear, i, 1).toLocaleDateString("pt-BR", { month: "long" });
-    button.type = "button"; button.className = "finance-month-link"; button.textContent = monthName;
-    button.setAttribute("aria-label", `Ver detalhes de ${monthName}`);
-    button.onclick = () => { fnMonth = i; renderFinanceDetails(); };
-    th.append(button); header.append(th);
-  }
-  head.append(header);
-
-  const monthly = Array.from({ length: 12 }, (_, i) => fnMonthlyData(i));
+function fnFinanceSummary(data) {
   const usedCategories = new Set(fnTransactions.map((r) => String(r.category_id)));
   const categories = fnCategories.filter((c) => c.active || usedCategories.has(String(c.id)));
-  const incomeCategories = categories.filter((c) => c.kind === "income");
-  const expenseCategories = categories.filter((c) => c.kind === "expense");
-  const amount = (data, category) => data.categoryTotals.get(String(category.id)) ?? 0;
-  const memberships = (data) => [...data.memberships.values()]
+  const amount = (category) => data.categoryTotals.get(String(category.id)) ?? 0;
+  const memberships = [...data.memberships.values()]
     .reduce((sum, row) => sum + Number(row.received_amount), 0);
-  const otherIncome = (data) => incomeCategories.reduce((sum, category) => sum + amount(data, category), 0);
-  const expenses = (data) => expenseCategories.reduce((sum, category) => sum + amount(data, category), 0);
-  const addRow = (title, getAmount, className = "", group = null) => {
-    const tr = document.createElement("tr");
-    if (className) tr.className = className;
-    if (group) {
-      tr.dataset.financeGroup = group;
-      tr.hidden = !fnAnnualExpanded[group];
-    }
-    const th = document.createElement("th");
-    th.scope = "row"; th.textContent = title; tr.append(th);
-    for (const data of monthly) {
-      const td = document.createElement("td");
-      td.className = "num"; td.textContent = money(getAmount(data)); tr.append(td);
-    }
-    body.append(tr);
+  const incomeCategories = categories.filter((category) => category.kind === "income");
+  const expenseCategories = categories.filter((category) => category.kind === "expense");
+  const daily = fnDailyTotal(data);
+  const otherIncome = incomeCategories.reduce((sum, category) => sum + amount(category), 0);
+  const expenses = expenseCategories.reduce((sum, category) => sum + amount(category), 0);
+  return {
+    income: memberships + daily + otherIncome,
+    expenses,
+    balance: memberships + daily + otherIncome - expenses,
+    incomeRows: [
+      { label: "Mensalidades", amount: memberships },
+      { label: "Diárias", amount: daily },
+      ...incomeCategories.map((category) => ({ label: category.name, amount: amount(category) })),
+    ],
+    expenseRows: expenseCategories.map((category) => ({ label: category.name, amount: amount(category) })),
+  };
+}
+
+function renderFinanceDashboard() {
+  const grid = $("fn-annual-grid");
+  grid.innerHTML = "";
+
+  const monthly = Array.from({ length: 12 }, (_, i) => fnMonthlyData(i));
+  const addMetric = (card, label, value, className) => {
+    const metric = document.createElement("span");
+    metric.className = `finance-month-metric ${className}`;
+    const name = document.createElement("span");
+    name.className = "finance-month-metric-label";
+    name.textContent = label;
+    const total = document.createElement("span");
+    total.className = "finance-month-metric-value";
+    total.textContent = money(value);
+    metric.append(name, total);
+    card.append(metric);
   };
 
-  const addGroupTotal = (title, group, getAmount) => {
-    const tr = document.createElement("tr");
-    tr.className = "finance-total finance-group-total";
-    const th = document.createElement("th");
-    th.scope = "row";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "finance-group-toggle";
-    button.setAttribute("aria-expanded", String(fnAnnualExpanded[group]));
-    const label = document.createElement("span");
-    label.textContent = title;
-    const indicator = document.createElement("span");
-    indicator.className = "finance-chevron";
-    indicator.setAttribute("aria-hidden", "true");
-    indicator.textContent = fnAnnualExpanded[group] ? "▾" : "▸";
-    button.append(label, indicator);
-    button.onclick = () => {
-      fnAnnualExpanded[group] = !fnAnnualExpanded[group];
-      const expanded = fnAnnualExpanded[group];
-      button.setAttribute("aria-expanded", String(expanded));
-      indicator.textContent = expanded ? "▾" : "▸";
-      body.querySelectorAll(`[data-finance-group="${group}"]`).forEach((row) => { row.hidden = !expanded; });
+  monthly.forEach((data, i) => {
+    const monthName = new Date(fnYear, i, 1).toLocaleDateString("pt-BR", { month: "long" });
+    const summary = fnFinanceSummary(data);
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "finance-month-card";
+    card.setAttribute("aria-pressed", String(i === fnMonth));
+    card.setAttribute("aria-label", `${monthName}: receitas ${money(summary.income)}, despesas ${money(summary.expenses)}, balanço ${money(summary.balance)}. Ver detalhes.`);
+    const title = document.createElement("span");
+    title.className = "finance-month-card-title";
+    title.textContent = monthName;
+    card.append(title);
+    addMetric(card, "Receitas", summary.income, "income");
+    addMetric(card, "Despesas", summary.expenses, "expense");
+    addMetric(card, "Balanço", summary.balance, "balance");
+    card.onclick = () => {
+      fnMonth = i;
+      grid.querySelectorAll(".finance-month-card").forEach((monthCard, index) => {
+        monthCard.setAttribute("aria-pressed", String(index === fnMonth));
+      });
+      renderFinanceDashboardDetails();
+      renderFinanceDetails();
+      $("fn-dashboard-detail").scrollIntoView({ behavior: "smooth", block: "start" });
     };
-    th.append(button);
-    tr.append(th);
-    for (const data of monthly) {
-      const td = document.createElement("td");
-      td.className = "num"; td.textContent = money(getAmount(data)); tr.append(td);
-    }
-    body.append(tr);
-  };
+    grid.append(card);
+  });
+  renderFinanceDashboardDetails();
+}
 
-  addGroupTotal("Total de receitas", "income",
-    (data) => memberships(data) + fnDailyTotal(data) + otherIncome(data));
-  addRow("Mensalidades", memberships, "", "income");
-  addRow("Diárias", fnDailyTotal, "", "income");
-  for (const category of incomeCategories) {
-    addRow(category.name, (data) => amount(data, category), "", "income");
-  }
-  addGroupTotal("Total de despesas", "expense", expenses);
-  for (const category of expenseCategories) {
-    addRow(category.name, (data) => amount(data, category), "", "expense");
-  }
-  addRow("Balanço", (data) => memberships(data) + fnDailyTotal(data) + otherIncome(data) - expenses(data), "finance-balance");
-  renderFinanceDetails();
+function renderFinanceDashboardDetails() {
+  const data = fnMonthlyData(fnMonth);
+  const summary = fnFinanceSummary(data);
+  const label = new Date(fnYear, fnMonth, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  $("fn-dashboard-month-label").textContent = label;
+  $("fn-dashboard-balance").textContent = money(summary.balance);
+  $("fn-dashboard-income-total").textContent = money(summary.income);
+  $("fn-dashboard-expense-total").textContent = money(summary.expenses);
+
+  const renderRows = (target, rows) => {
+    target.replaceChildren();
+    const nonzeroRows = rows.filter((row) => row.amount !== 0);
+    if (!nonzeroRows.length) {
+      const empty = document.createElement("p");
+      empty.className = "finance-breakdown-empty";
+      empty.textContent = "Nenhum lançamento neste mês.";
+      target.append(empty);
+      return;
+    }
+    for (const row of nonzeroRows) {
+      const line = document.createElement("div");
+      line.className = "finance-breakdown-row";
+      const name = document.createElement("span");
+      name.textContent = row.label;
+      const value = document.createElement("strong");
+      value.textContent = money(row.amount);
+      line.append(name, value);
+      target.append(line);
+    }
+  };
+  renderRows($("fn-dashboard-income"), summary.incomeRows);
+  renderRows($("fn-dashboard-expenses"), summary.expenseRows);
 }
 
 function renderFinanceDetails() {
@@ -777,13 +1002,15 @@ function renderFinanceMemberships(data, period) {
     const inputs = [];
     const expected = document.createElement("td");
     expected.className = "num";
+    expected.dataset.label = "Previsto";
     expected.textContent = money(expectedAmount);
     row.append(expected);
-    for (const [value, label] of [
-      [saved?.received_amount ?? "0", `Recebido de ${family.name}`],
-      [saved?.paid_at ?? "", `Data do pagamento de ${family.name}`],
+    for (const [value, label, fieldLabel] of [
+      [saved?.received_amount ?? "0", `Recebido de ${family.name}`, "Recebido"],
+      [saved?.paid_at ?? "", `Data do pagamento de ${family.name}`, "Data do pagamento"],
     ]) {
       const cell = document.createElement("td");
+      cell.dataset.label = fieldLabel;
       const input = document.createElement("input");
       input.type = label.startsWith("Data") ? "date" : "number";
       if (input.type === "number") { input.min = "0"; input.step = "0.01"; }
@@ -792,9 +1019,34 @@ function renderFinanceMemberships(data, period) {
     }
     const paid = expectedAmount > 0 && Number(saved?.received_amount ?? 0) >= expectedAmount;
     const status = document.createElement("td");
+    status.dataset.label = "Status";
+    const receipts = saved ? fnMembershipReceipts.get(saved.id) ?? [] : [];
     status.className = paid ? "finance-paid" : "finance-pending";
-    status.textContent = paid ? "Pago" : "Pendente"; row.append(status);
+    status.textContent = paid
+      ? receipts.length ? "Pago" : "Pago · sem comprovante"
+      : "Pendente";
+    row.append(status);
+    const proofsCell = document.createElement("td");
+    proofsCell.dataset.label = "Comprovantes";
+    const proofList = document.createElement("div");
+    proofList.className = "finance-proof-list";
+    for (const receipt of receipts) {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "secondary";
+      open.textContent = receipt.original_name;
+      open.onclick = () => openPaymentProof(receipt, "fn-msg");
+      proofList.append(open);
+    }
+    const proofInput = document.createElement("input");
+    proofInput.type = "file";
+    proofInput.accept = "application/pdf,image/jpeg,image/png";
+    proofInput.multiple = true;
+    proofInput.setAttribute("aria-label", `Adicionar comprovantes de ${family.name}`);
+    proofsCell.append(proofList, proofInput);
+    row.append(proofsCell);
     const action = document.createElement("td");
+    action.dataset.label = "Ação";
     const save = document.createElement("button");
     save.type = "button"; save.className = "secondary"; save.textContent = "Salvar";
     save.onclick = async () => {
@@ -803,12 +1055,54 @@ function renderFinanceMemberships(data, period) {
         return;
       }
       save.disabled = true;
+      const receivedAmount = Number(inputs[0].value);
+      const files = [...(proofInput.files ?? [])];
+      let membershipId = saved?.id;
+      if (!membershipId && files.length) {
+        const { data: created, error: createError } = await db.from("finance_memberships").upsert({
+          family_id: family.id, period_month: period,
+          expected_amount: expectedAmount, received_amount: 0, paid_at: null,
+        }, { onConflict: "family_id,period_month" }).select("id").single();
+        if (createError) { say("fn-msg", createError.message); save.disabled = false; return; }
+        membershipId = created.id;
+      }
+      if (membershipId) {
+        for (const file of files) {
+          const { data: receipt, error: uploadError } = await uploadPaymentProof(file);
+          if (uploadError) {
+            await loadFinance();
+            say("fn-msg", `Não foi possível concluir o envio: ${uploadError}`);
+            save.disabled = false;
+            return;
+          }
+          const { error: linkError } = await db.from("payment_receipt_memberships")
+            .insert({ receipt_id: receipt.id, membership_id: membershipId });
+          if (linkError) {
+            const cleanupErrors = await cleanupUnlinkedPaymentProof(receipt);
+            await loadFinance();
+            say("fn-msg", [`Não foi possível vincular o comprovante: ${linkError.message}`, ...cleanupErrors].join(" "));
+            save.disabled = false;
+            return;
+          }
+        }
+      }
+      const availableReceipts = (saved ? fnMembershipReceipts.get(saved.id) ?? [] : []).length + files.length;
+      if (receivedAmount > 0 && !availableReceipts) {
+        say("fn-msg", `Anexe um comprovante para registrar o recebimento de ${family.name}.`);
+        save.disabled = false;
+        return;
+      }
       const { error } = await db.from("finance_memberships").upsert({
         family_id: family.id, period_month: period,
-        expected_amount: expectedAmount, received_amount: Number(inputs[0].value),
-        paid_at: inputs[1].value || null,
+        expected_amount: expectedAmount, received_amount: receivedAmount,
+        paid_at: receivedAmount > 0 ? inputs[1].value || null : null,
       }, { onConflict: "family_id,period_month" });
-      if (error) { say("fn-msg", error.message); save.disabled = false; return; }
+      if (error) {
+        await loadFinance();
+        say("fn-msg", `Comprovante(s) anexado(s), mas o recebimento não foi salvo: ${error.message}`);
+        save.disabled = false;
+        return;
+      }
       await loadFinance();
     };
     action.append(save); row.append(action); membershipRows.append(row);
@@ -817,16 +1111,22 @@ function renderFinanceMemberships(data, period) {
 
 $("fn-membership-rate-form").onsubmit = async (event) => {
   event.preventDefault();
+  const year = Number($("r-year").value);
+  if (!Number.isInteger(year) || year < 1900 || year > 9998) {
+    return say("rates-msg", "Informe um ano entre 1900 e 9998.");
+  }
   const amount = Number($("fn-membership-rate").value);
   if (!Number.isFinite(amount) || amount < 0) {
-    say("fn-msg", "Informe uma mensalidade válida (zero ou maior).");
+    say("rates-msg", "Informe uma mensalidade válida (zero ou maior).");
     return;
   }
   const { error } = await db.from("finance_membership_rates").upsert(
-    { year: fnYear, amount }, { onConflict: "year" },
+    { year, amount }, { onConflict: "year" },
   );
-  if (error) return say("fn-msg", error.message);
+  if (error) return say("rates-msg", error.message);
+  fnYear = year;
   await loadFinance();
+  say("rates-msg", `Mensalidade padrão de ${year} salva.`);
 };
 
 function renderFinanceDaily(data, period) {
@@ -839,11 +1139,14 @@ function renderFinanceDaily(data, period) {
     const name = document.createElement("th");
     name.scope = "row"; name.textContent = family.name; row.append(name);
     const source = document.createElement("td");
+    source.dataset.label = "Importado das reservas";
     source.className = "num"; source.textContent = money(imported); row.append(source);
     const finalAmount = document.createElement("td");
+    finalAmount.dataset.label = "Valor no financeiro";
     finalAmount.className = "num"; finalAmount.textContent = money(adjustment?.amount ?? imported);
     row.append(finalAmount);
     const action = document.createElement("td");
+    action.dataset.label = "Ajuste";
     const input = document.createElement("input");
     input.type = "number"; input.min = "0"; input.step = "0.01"; input.placeholder = "Sem ajuste";
     input.value = adjustment ? adjustment.amount : "";
@@ -887,14 +1190,18 @@ function renderFinanceTransactions() {
   const rows = fnTransactions.filter((r) => fnMonthKey(r.transaction_date) === period.slice(0, 7));
   for (const transaction of rows) {
     const row = document.createElement("tr"), category = categoryMap.get(String(transaction.category_id));
-    for (const value of [
-      new Date(`${transaction.transaction_date}T12:00:00`).toLocaleDateString("pt-BR"),
-      transaction.kind === "income" ? "Receita" : "Despesa",
-      category?.name ?? "Categoria removida", transaction.description, money(Number(transaction.amount)),
+    for (const [value, label] of [
+      [new Date(`${transaction.transaction_date}T12:00:00`).toLocaleDateString("pt-BR"), "Data"],
+      [transaction.kind === "income" ? "Receita" : "Despesa", "Tipo"],
+      [category?.name ?? "Categoria removida", "Categoria"],
+      [transaction.description, "Descrição"],
+      [money(Number(transaction.amount)), "Valor"],
     ]) {
-      const cell = document.createElement("td"); cell.textContent = value; row.append(cell);
+      const cell = document.createElement("td");
+      cell.dataset.label = label; cell.textContent = value; row.append(cell);
     }
     const actions = document.createElement("td");
+    actions.dataset.label = "Ações";
     const edit = document.createElement("button");
     edit.type = "button"; edit.className = "link"; edit.textContent = "Editar";
     edit.onclick = () => {
@@ -958,6 +1265,14 @@ $("fn-load").onclick = async () => {
   fnYear = year;
   await loadFinance();
 };
+$("fn-dashboard-load").onclick = async () => {
+  const year = Number($("fn-dashboard-year").value);
+  if (!Number.isInteger(year) || year < 1900 || year > 9998) {
+    return say("fn-dashboard-msg", "Informe um ano entre 1900 e 9998.");
+  }
+  fnYear = year;
+  await loadFinance();
+};
 $("fn-prev").onclick = async () => {
   if (fnYear === 1900 && fnMonth === 0) return;
   if (fnMonth === 0) { fnMonth = 11; fnYear--; } else fnMonth--;
@@ -1002,14 +1317,35 @@ $("fn-category-form").onsubmit = async (event) => {
   await loadFinance();
 };
 
-function showRates() {
+async function showRates() {
   current = null;
   setView("rates");
   setActive((b) => b.id === "nav-rates");
-  $("r-socio").value = rates.socio;
-  $("r-convidado").value = rates.convidado;
+  say("rates-msg", "");
+  const year = new Date().getFullYear();
+  $("r-year").value = year;
+  await displayRates(year);
+}
+
+async function displayRates(year) {
+  fnYear = year;
+  $("fn-membership-rate-year").textContent = String(year);
+  $("r-socio").value = rates.socio ?? "";
+  $("r-convidado").value = rates.convidado ?? "";
+  const { data, error } = await db.from("finance_membership_rates")
+    .select("amount").eq("year", year).maybeSingle();
+  if (error) return say("rates-msg", error.message);
+  $("fn-membership-rate").value = data?.amount ?? "";
   say("rates-msg", "");
 }
+
+$("r-load").onclick = async () => {
+  const year = Number($("r-year").value);
+  if (!Number.isInteger(year) || year < 1900 || year > 9998) {
+    return say("rates-msg", "Informe um ano entre 1900 e 9998.");
+  }
+  await displayRates(year);
+};
 
 $("form-rates").onsubmit = async (e) => {
   e.preventDefault();
@@ -1395,7 +1731,9 @@ $("r-close").onclick = () => $("res-dialog").close();
 $("r-delete").onclick = async () => {
   if (!confirm("Cancelar esta reserva?")) return;
   const { error } = await db.from("reservations").delete().eq("id", editing.id);
-  if (error) return say("r-msg", error.message);
+  if (error) return say("r-msg", error.code === "23503"
+    ? "Não é possível excluir esta reserva porque há um comprovante vinculado a uma diária. Remova o vínculo financeiro antes."
+    : error.message);
   $("res-dialog").close();
   loadAll();
 };
@@ -1467,7 +1805,11 @@ $("res-form").onsubmit = async (e) => {
     $("res-dialog").close();
     loadAll();
   } catch (err) {
-    say("r-msg", err.code === "23P01" ? "Esse quarto já está reservado em parte desse período. Escolha outras datas." : err.message);
+    say("r-msg", err.code === "23P01"
+      ? "Esse quarto já está reservado em parte desse período. Escolha outras datas."
+      : err.code === "23503"
+        ? "Não é possível remover hóspedes com comprovantes de diárias vinculados. Remova o vínculo financeiro antes."
+        : err.message);
   } finally {
     $("r-save").disabled = false;
   }

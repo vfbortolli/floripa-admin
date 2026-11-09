@@ -20,6 +20,8 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 | `supabase/phase2f.sql` | Restringe a leitura de e-mails e tarifas; executar após `phase2e.sql`. |
 | `supabase/phase2g.sql` | Cria tabelas, permissões e RPC do Financeiro; executar após `phase2f.sql`. |
 | `supabase/phase2h.sql` | Define o valor anual das mensalidades; executar após `phase2g.sql`. |
+| `supabase/phase2i.sql` … `phase2j.sql` | Ajustes de contabilização de diárias; `phase2k.sql` depende de `phase2j.sql`. |
+| `supabase/phase2k.sql` | Cria bucket privado e vínculos de comprovantes para mensalidades e diárias; executar após `phase2j.sql`. |
 | `supabase/schema.sql` | Fase 1: tabelas, funções de permissão, policies, seed. |
 | `supabase/phase2a.sql` … `phase2e.sql` | Migrações incrementais, **rodadas manualmente no SQL Editor, em ordem**. Idempotentes. |
 | `quarto-bortolli.csv` | Inventário do Quarto Bortolli (34 itens, já importado). |
@@ -36,6 +38,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - `guest_charges` (guest_id pk, rate, paid, paid_at): valor/noite **congelado na criação** pelo trigger `set_guest_charge` (recalcula se o tipo mudar). Legível só por dono da reserva e admins; só admin altera `paid`.
 - `audit_log` (at, actor, tbl, op, row_id, label, old_data, new_data): preenchido por triggers de auditoria nas tabelas operacionais e financeiras. Leitura só admin.
 - Financeiro (`phase2g.sql` e `phase2h.sql`): `finance_categories` (categorias de receitas/despesas), `finance_membership_rates` (valor padrão da mensalidade por ano), `finance_memberships` (previsto/recebido por família e mês), `finance_transactions` (lançamentos avulsos) e `finance_daily_adjustments` (ajuste do total importado por família/mês). Todas as tabelas são exclusivas de admins via RLS; `get_finance_daily(ano)` calcula diárias mensais a partir das reservas confirmadas. O valor anual é usado como previsto para todas as famílias e meses; 2026 inicia em R$ 300.
+- Comprovantes (`phase2k.sql`): bucket privado `payment-proofs` (PDF/JPG/PNG, até 10 MB), acessível somente a admins. `payment_receipts` guarda metadados; `payment_receipt_memberships` permite vários comprovantes por mensalidade; `payment_receipt_guest_charges` permite um comprovante para várias cobranças de diárias. Novas baixas são bloqueadas no banco sem comprovante associado. O backup JSON inclui metadados e vínculos, não os arquivos do Storage.
 
 ## Funções SQL (security definer)
 `is_allowed()`, `is_admin()`, `can_edit_space(sp)`, `can_manage_reservation(rid)`, `is_reservable_common(sp)`, `is_reservable_personal(sp)`, `me_email()`, `list_people()`, `get_rates()`, `approve_reservation(id, replace)`, `reject_reservation(id)`, `export_backup()` (admin), `ping()`.
@@ -59,13 +62,14 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - Pessoas: `showPeople`, `loadPeople`. Valores: `showRates`. Backup: botão `btn-backup` (RPC `export_backup`).
 - Agenda: `showAgenda`, `renderRoomChips` (um quarto por vez), `loadMonth`, `loadPending`, `renderGantt` (calendário mensal em grade; barras do meio do dia de entrada ao meio do dia de saída), `renderResList`, `renderPendingList`.
 - Reserva: `openReservation`, `refreshForm`, `addGuest`, submit de `#res-form` (insere/atualiza reserva e sincroniza guests; **não é transacional**), `resolveReservation` (aprovar/recusar).
-- Cobrança: `showBilling`, `loadBilling`, `renderBilling`, export CSV. Histórico: `showHistory`, `loadHistory`, `hsText`.
-- Financeiro: `showFinance`, `loadFinance`, `renderFinance`, detalhes mensais de mensalidades/diárias e gestão de lançamentos/categorias.
+- Cobrança: `showBilling`, `loadBilling`, `renderBilling`, export CSV e vínculos de comprovantes em `payment_receipt_guest_charges`. Um arquivo pode quitar várias diárias selecionadas. Histórico: `showHistory`, `loadHistory`, `hsText`.
+- Financeiro: `showFinance`, `loadFinance`, `renderFinance`, detalhes mensais de mensalidades/diárias e gestão de lançamentos/categorias; vários comprovantes podem ser vinculados a uma mensalidade.
 
 ## Convenções e armadilhas
 - Execute a `phase2f.sql` após `phase2e.sql` antes de publicar a versão de `app.js` que usa as permissões de privacidade atualizadas.
 - Execute `phase2g.sql` após `phase2f.sql` antes de usar/publicar o módulo Financeiro.
 - Execute `phase2h.sql` após `phase2g.sql` antes de usar/publicar o padrão anual de mensalidades.
+- Execute `phase2k.sql` após `phase2j.sql` antes de publicar o envio de comprovantes e a baixa obrigatória com comprovante.
 - Datas como `YYYY-MM-DD`; usar `parseDate`/`fmtDate` (evitam bug de fuso). Valores em BRL via `money()`.
 - Texto vindo do banco entra com `textContent` (nunca `innerHTML`).
 - Mudou o banco? Criar novo `supabase/phaseX.sql` idempotente e avisar o usuário para rodá-lo; **não publicar JS que dependa de SQL ainda não executado sem avisar**.
@@ -74,7 +78,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - Commits terminam com `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ## Estado atual
-Os módulos existentes estão publicados. O módulo Financeiro depende da execução manual das migrações `phase2g.sql` e `phase2h.sql` no Supabase antes de ser usado/publicado. O fluxo de aprovação e os módulos de cobrança, backup e histórico foram verificados só visualmente com dados simulados, **sem teste com outras contas reais**.
+Os módulos existentes estão publicados. O Financeiro e os comprovantes dependem das migrações `phase2g.sql`–`phase2k.sql` aplicadas manualmente no Supabase antes da publicação/uso. A versão com comprovantes não deve ser publicada antes da execução da `phase2k.sql`. O fluxo de aprovação e os módulos de cobrança, backup e histórico foram verificados só visualmente com dados simulados, **sem teste com outras contas reais**.
 
 ## Pendências / ideias
 - Cadastrar responsáveis das outras famílias e demais admins (usuário ainda não tem os e-mails).

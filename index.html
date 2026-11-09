@@ -106,10 +106,48 @@
           </span>
           <button id="bl-csv" class="secondary push">Exportar CSV</button>
         </div>
-        <p class="msg">Reservas confirmadas com saída no mês, agrupadas por pessoa. Isentos não entram.</p>
+        <p class="msg">Reservas confirmadas com saída no mês, agrupadas por pessoa. Isentos não entram. Para dar baixa, selecione as cobranças e anexe o comprovante.</p>
         <div id="bl-totals" class="bl-totals"></div>
         <div id="bl-list"></div>
         <p id="bl-msg" class="msg"></p>
+      </main>
+      <main id="dashboard" class="hidden">
+        <div class="toolbar">
+          <h2>Painel financeiro</h2>
+          <label class="finance-year">Ano <input id="fn-dashboard-year" type="number" min="1900" max="9998" step="1"></label>
+          <button id="fn-dashboard-load" class="secondary">Consultar</button>
+        </div>
+        <p class="msg">Visão geral das receitas, despesas e do balanço da casa. Selecione um mês para ver os detalhes.</p>
+        <section class="finance-annual" aria-label="Resumo financeiro do ano">
+          <h3 class="sub">Meses de <span id="fn-dashboard-year-label"></span></h3>
+          <div id="fn-annual-grid" class="finance-annual-grid"></div>
+        </section>
+        <p id="fn-dashboard-msg" class="msg"></p>
+        <section id="fn-dashboard-detail" class="finance-dashboard-detail" aria-live="polite">
+          <div class="finance-dashboard-detail-heading">
+            <h3 class="sub">Detalhes de <span id="fn-dashboard-month-label"></span></h3>
+            <div class="finance-dashboard-balance">
+              <span>Balanço do mês</span>
+              <strong id="fn-dashboard-balance"></strong>
+            </div>
+          </div>
+          <div class="finance-breakdown-grid">
+            <section class="finance-breakdown income">
+              <div class="finance-breakdown-heading">
+                <h4>Receitas</h4>
+                <strong id="fn-dashboard-income-total"></strong>
+              </div>
+              <div id="fn-dashboard-income"></div>
+            </section>
+            <section class="finance-breakdown expense">
+              <div class="finance-breakdown-heading">
+                <h4>Despesas</h4>
+                <strong id="fn-dashboard-expense-total"></strong>
+              </div>
+              <div id="fn-dashboard-expenses"></div>
+            </section>
+          </div>
+        </section>
       </main>
       <main id="finance" class="hidden">
         <div class="toolbar">
@@ -118,12 +156,6 @@
           <button id="fn-load" class="secondary">Consultar</button>
         </div>
         <p class="msg">Receitas e despesas da casa. Diárias calculadas a partir das reservas confirmadas e distribuídas pelas noites de cada mês.</p>
-        <div class="finance-table-wrap finance-annual-wrap">
-          <table id="fn-annual-table" class="finance-table finance-annual-table">
-            <thead id="fn-annual-head"></thead>
-            <tbody id="fn-annual-body"></tbody>
-          </table>
-        </div>
         <p id="fn-msg" class="msg"></p>
         <h3 class="sub">Detalhe do mês <span id="fn-month-label"></span></h3>
         <div class="toolbar finance-month-toolbar">
@@ -133,16 +165,10 @@
 
         <details class="finance-section">
           <summary>Mensalidades por família</summary>
-          <form id="fn-membership-rate-form" class="add finance-form">
-            <label>Mensalidade padrão em <span id="fn-membership-rate-year"></span>
-              <input id="fn-membership-rate" type="number" min="0" step="0.01" required aria-label="Mensalidade padrão do ano">
-            </label>
-            <button type="submit">Salvar valor do ano</button>
-          </form>
-          <p class="msg">O previsto vale para todas as famílias e meses do ano. Recebido e data são informados por família e mês.</p>
+          <p class="msg">O previsto vale para todas as famílias e meses do ano. Configure o valor padrão anual no menu Valores. Anexe os comprovantes dos pagamentos (aceita vários para pagamentos parciais) antes de registrar qualquer valor recebido.</p>
           <div class="finance-table-wrap">
             <table class="finance-table">
-              <thead><tr><th>Família</th><th>Previsto</th><th>Recebido</th><th>Data do pagamento</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Família</th><th>Previsto</th><th>Recebido</th><th>Data do pagamento</th><th>Status</th><th>Comprovantes</th><th></th></tr></thead>
               <tbody id="fn-memberships"></tbody>
             </table>
           </div>
@@ -196,12 +222,26 @@
       </main>
       <main id="rates" class="hidden">
         <div class="toolbar"><h2>Valores</h2></div>
-        <p class="msg">Valor por pessoa por noite. Reservas já criadas mantêm o valor de quando foram feitas.</p>
+        <p class="msg">Gerencie aqui as tarifas de diárias e o valor padrão anual da mensalidade.</p>
+        <h3 class="sub">Tarifas de diárias</h3>
         <form id="form-rates" class="add person-form">
           <label class="check">Sócio R$ <input id="r-socio" type="number" min="0" step="0.01" required></label>
           <label class="check">Convidado R$ <input id="r-convidado" type="number" min="0" step="0.01" required></label>
-          <button type="submit">Salvar</button>
+          <button type="submit">Salvar diárias</button>
         </form>
+        <p class="msg">As tarifas de diárias se aplicam a novas cobranças. Reservas já criadas mantêm a tarifa original.</p>
+        <h3 class="sub">Mensalidade padrão do ano</h3>
+        <div class="toolbar">
+          <label class="finance-year">Ano <input id="r-year" type="number" min="1900" max="9998" step="1"></label>
+          <button id="r-load" class="secondary">Consultar</button>
+        </div>
+        <form id="fn-membership-rate-form" class="add finance-form">
+          <label>Mensalidade padrão em <span id="fn-membership-rate-year"></span>
+            <input id="fn-membership-rate" type="number" min="0" step="0.01" required aria-label="Mensalidade padrão do ano">
+          </label>
+          <button type="submit">Salvar mensalidade</button>
+        </form>
+        <p class="msg">O valor padrão da mensalidade vale para todas as famílias e meses do ano selecionado.</p>
         <p id="rates-msg" class="msg"></p>
       </main>
       <main id="inventory">
@@ -212,6 +252,7 @@
           <span id="edit-tools" class="hidden">
             <label class="btn secondary">Importar CSV <input type="file" id="csv-file" accept=".csv,text/csv" hidden></label>
           </span>
+          <input id="item-search" type="search" placeholder="Buscar item..." aria-label="Buscar no inventário">
         </div>
         <table>
           <thead><tr><th>Descrição</th><th class="num">Qtd</th><th>Estado</th><th>Observações</th><th></th></tr></thead>
