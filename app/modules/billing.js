@@ -298,7 +298,8 @@ export function renderBilling() {
           contactLine.className = "bl-line";
           const name = document.createElement("span");
           name.textContent = contact.name;
-          const url = whatsappUrl(contact.phone, `Olá, ${contact.name}! Passando para lembrar da necessidade de pagamento da mensalidade referente a ${monthLabel}.`);
+          const message = `Lembrete de Mensalidade da Casa dos Paulistas - Florianopolis\nMês: ${monthLabel}\nValor: ${money(open)}`;
+          const url = whatsappUrl(contact.phone, message);
           if (url) {
             const link = document.createElement("a");
             link.className = "btn whatsapp-link";
