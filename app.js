@@ -1599,43 +1599,81 @@ function renderResList() {
   const box = $("res-list");
   box.innerHTML = "";
   const list = monthRes.filter((r) => r.space_id === agRoom);
-  if (!list.length) {
-    box.innerHTML = '<p class="empty">Nenhuma reserva neste mês.</p>';
-    return;
-  }
-  for (const r of list) {
-    const room = spaces.find((s) => s.id === r.space_id);
-    const nights = nightsBetween(r.check_in, r.check_out);
-    const card = document.createElement("div");
-    card.className = "res-card";
-    const head = document.createElement("div");
-    head.className = "res-head";
-    head.innerHTML = "";
-    const title = document.createElement("b");
-    title.textContent = `${room?.name ?? "?"} · ${brDate(r.check_in)} → ${brDate(r.check_out)}`;
-    const meta = document.createElement("span");
-    meta.className = "count";
-    meta.textContent = `${nights} ${nights === 1 ? "noite" : "noites"}`;
-    head.append(title, meta);
-    const body = document.createElement("div");
-    body.className = "res-body";
-    if (r.kind === "block") body.textContent = "Aluguel por plataforma" + (r.note ? ` – ${r.note}` : "");
-    else {
-      body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${r.created_by_name || "Pessoa cadastrada"}`;
-      if (canManage(r)) {
-        const t = reservationTotal(r);
-        if (t != null) {
-          const tt = document.createElement("span");
-          tt.className = "tag bom";
-          tt.textContent = money(t);
-          body.append(" ", tt);
+  const room = spaces.find((s) => s.id === agRoom);
+  const roomNumber = room?.name?.match(/\d+/)?.[0];
+  
+  const wrapper = document.createElement("div");
+  wrapper.className = "res-list-wrapper";
+  
+  // Adiciona as reservas
+  if (list.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Nenhuma reserva neste mês.";
+    wrapper.append(empty);
+  } else {
+    for (const r of list) {
+      const nights = nightsBetween(r.check_in, r.check_out);
+      const card = document.createElement("div");
+      card.className = "res-card";
+      const head = document.createElement("div");
+      head.className = "res-head";
+      head.innerHTML = "";
+      const title = document.createElement("b");
+      title.textContent = `${room?.name ?? "?"} · ${brDate(r.check_in)} → ${brDate(r.check_out)}`;
+      const meta = document.createElement("span");
+      meta.className = "count";
+      meta.textContent = `${nights} ${nights === 1 ? "noite" : "noites"}`;
+      head.append(title, meta);
+      const body = document.createElement("div");
+      body.className = "res-body";
+      if (r.kind === "block") body.textContent = "Aluguel por plataforma" + (r.note ? ` – ${r.note}` : "");
+      else {
+        body.textContent = r.reservation_guests.map((g) => g.name).join(", ") + ` · por ${r.created_by_name || "Pessoa cadastrada"}`;
+        if (canManage(r)) {
+          const t = reservationTotal(r);
+          if (t != null) {
+            const tt = document.createElement("span");
+            tt.className = "tag bom";
+            tt.textContent = money(t);
+            body.append(" ", tt);
+          }
         }
       }
+      card.append(head, body);
+      card.onclick = () => openReservation(r);
+      wrapper.append(card);
     }
-    card.append(head, body);
-    card.onclick = () => openReservation(r);
-    box.append(card);
   }
+  
+  // Adiciona imagens do quarto SEMPRE
+  if (roomNumber) {
+    const container = document.createElement("div");
+    container.className = "room-images-container";
+    
+    const imagesByRoom = {
+      "1": ["quarto-1.1.avif", "quarto-1.2.avif"],
+      "2": ["quarto-2.1.avif"],
+      "3": ["quarto-3.1.avif"]
+    };
+    
+    const images = imagesByRoom[roomNumber] || [];
+    console.log(`Quarto: ${room?.name}, Número: ${roomNumber}, Imagens:`, images);
+    
+    for (const imageName of images) {
+      const imageElement = document.createElement("img");
+      imageElement.src = `espacos/${imageName}`;
+      imageElement.className = "room-image";
+      imageElement.alt = `${room?.name} - Foto`;
+      container.append(imageElement);
+    }
+    
+    if (container.children.length > 0) {
+      wrapper.append(container);
+    }
+  }
+  
+  box.append(wrapper);
 }
 
 $("ag-prev").onclick = () => { agMonth = new Date(agMonth.getFullYear(), agMonth.getMonth() - 1, 1); loadMonth(); };

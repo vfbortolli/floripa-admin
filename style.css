@@ -410,6 +410,10 @@ button.danger:hover { background: #fde8e6; color: var(--danger); }
 .res-card:hover { background: var(--bg); }
 .res-head { display: flex; justify-content: space-between; gap: 8px; }
 .res-body { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.res-list-wrapper { margin-top: 12px; }
+.room-images-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 20px; padding: 16px 0; }
+.room-image { width: 100%; height: auto; border-radius: 10px; object-fit: contain; max-height: 400px; box-shadow: 0 2px 8px rgba(16, 24, 40, .08); display: block; }
+.room-image:hover { box-shadow: 0 4px 16px rgba(16, 24, 40, .12); }
 .empty { text-align: center; color: var(--muted); padding: 24px 8px; }
 
 /* Diálogo de reserva */
