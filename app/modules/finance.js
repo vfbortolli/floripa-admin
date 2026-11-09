@@ -187,19 +187,27 @@ export function renderFinanceDashboardDetails() {
   const renderRows = (target, rows) => {
     target.innerHTML = "";
     for (const row of rows) {
-      const tr = document.createElement("tr");
-      const label = document.createElement("th"); label.scope = "row"; label.textContent = row.label;
-      const value = document.createElement("td"); value.className = "num"; value.textContent = money(row.amount);
-      tr.append(label, value);
-      target.append(tr);
+      if (row.amount <= 0) continue;
+      const div = document.createElement("div");
+      div.className = "finance-breakdown-row";
+      const label = document.createElement("span");
+      label.className = "finance-breakdown-label";
+      label.textContent = row.label;
+      const value = document.createElement("span");
+      value.className = "finance-breakdown-value";
+      value.textContent = money(row.amount);
+      div.append(label, value);
+      target.append(div);
     }
   };
-  renderRows($("fn-dashboard-income-rows"), summary.incomeRows);
-  renderRows($("fn-dashboard-expense-rows"), summary.expenseRows);
+  renderRows($("fn-dashboard-income"), summary.incomeRows);
+  renderRows($("fn-dashboard-expenses"), summary.expenseRows);
 }
 
 export function renderFinanceDetails() {
   const period = fnPeriod();
+  const label = new Date(state.fnYear, state.fnMonth, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  $("fn-month-label").textContent = label;
   renderFinanceMemberships(fnMonthlyData(state.fnMonth), period);
   renderFinanceDaily(fnMonthlyData(state.fnMonth), period);
   renderFinanceTransactions();
@@ -272,10 +280,23 @@ export function renderFinanceMemberships(data, period) {
       }
       const proofInput = document.createElement("input");
       proofInput.type = "file";
+      proofInput.className = "finance-attachment-input";
       proofInput.accept = "application/pdf,image/jpeg,image/png";
       proofInput.multiple = true;
       proofInput.setAttribute("aria-label", `Adicionar comprovantes de ${family.name}`);
-      proofsCell.append(proofList, proofInput);
+      const attachment = document.createElement("label");
+      attachment.className = "btn secondary finance-attachment";
+      attachment.append("Anexo", proofInput);
+      const attachmentName = document.createElement("span");
+      attachmentName.className = "finance-attachment-name";
+      attachmentName.setAttribute("aria-live", "polite");
+      proofInput.onchange = () => {
+        const files = [...(proofInput.files ?? [])];
+        attachmentName.textContent = files.length === 1 ? files[0].name : files.length ? `${files.length} arquivos` : "";
+        attachmentName.title = files.map((file) => file.name).join(", ");
+      };
+      proofList.append(attachment, attachmentName);
+      proofsCell.append(proofList);
     } else {
       proofsCell.textContent = "Restritos a administradores";
     }
@@ -448,10 +469,16 @@ export function renderFinanceTransactions() {
   for (const t of state.fnTransactions) {
     const category = state.fnCategories.find((c) => c.id === t.category_id);
     const row = document.createElement("tr");
+    
     const date = document.createElement("td");
     date.dataset.label = "Data"; 
     date.textContent = parseDate(t.transaction_date).toLocaleDateString("pt-BR");
     row.append(date);
+    
+    const type = document.createElement("td");
+    type.dataset.label = "Tipo";
+    type.textContent = t.kind === "income" ? "Receita" : "Despesa";
+    row.append(type);
     
     const cat = document.createElement("td");
     cat.dataset.label = "Categoria"; 
@@ -471,6 +498,8 @@ export function renderFinanceTransactions() {
     
     if (canManageFinance()) {
       const actions = document.createElement("td");
+      const actionButtons = document.createElement("div");
+      actionButtons.className = "finance-transaction-actions";
       const editBtn = document.createElement("button");
       editBtn.type = "button"; 
       editBtn.className = "secondary"; 
@@ -498,7 +527,8 @@ export function renderFinanceTransactions() {
         await loadFinance();
       };
       
-      actions.append(editBtn, delBtn);
+      actionButtons.append(editBtn, delBtn);
+      actions.append(actionButtons);
       row.append(actions);
     }
     tbody.append(row);
@@ -506,28 +536,58 @@ export function renderFinanceTransactions() {
 }
 
 export function renderFinanceCategories() {
+  const db = getDb();
   const container = $("fn-categories");
   container.innerHTML = "";
-  const incomeCategories = state.fnCategories.filter((c) => c.kind === "income");
-  const expenseCategories = state.fnCategories.filter((c) => c.kind === "expense");
+  const allCategories = state.fnCategories.slice().sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "income" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
   
-  for (const [title, categories] of [["Receitas", incomeCategories], ["Despesas", expenseCategories]]) {
-    const section = document.createElement("div");
-    section.className = "finance-category-section";
+  for (const c of allCategories) {
+    const row = document.createElement("div");
+    row.className = "finance-breakdown-row";
     
-    const heading = document.createElement("h3");
-    heading.textContent = title;
-    section.append(heading);
+    const label = document.createElement("span");
+    label.textContent = `${c.kind === "income" ? "Receita" : "Despesa"} · ${c.name}`;
+    row.append(label);
     
-    const list = document.createElement("ul");
-    for (const c of categories) {
-      const item = document.createElement("li");
-      item.textContent = c.name;
-      if (c.active) item.classList.add("active");
-      list.append(item);
+    if (canManageFinance()) {
+      const actions = document.createElement("div");
+      actions.className = "finance-category-actions";
+      
+      const renameBtn = document.createElement("button");
+      renameBtn.type = "button";
+      renameBtn.className = "secondary";
+      renameBtn.textContent = "Renomear";
+      renameBtn.onclick = () => {
+        const newName = prompt(`Novo nome para "${c.name}":`, c.name);
+        if (!newName || newName === c.name) return;
+        (async () => {
+          const { error } = await db.from("finance_categories").update({ name: newName }).eq("id", c.id);
+          if (error) return say("fn-msg", error.message);
+          await loadFinance();
+        })();
+      };
+      actions.append(renameBtn);
+      
+      const toggleBtn = document.createElement("button");
+      toggleBtn.type = "button";
+      toggleBtn.className = "secondary";
+      toggleBtn.textContent = c.active ? "Desativar" : "Ativar";
+      toggleBtn.onclick = () => {
+        (async () => {
+          const { error } = await db.from("finance_categories").update({ active: !c.active }).eq("id", c.id);
+          if (error) return say("fn-msg", error.message);
+          await loadFinance();
+        })();
+      };
+      actions.append(toggleBtn);
+      
+      row.append(actions);
     }
-    section.append(list);
-    container.append(section);
+    
+    container.append(row);
   }
 }
 
@@ -600,6 +660,7 @@ export function setupFinanceListeners() {
   $("fn-transaction-cancel").onclick = () => {
     setState("fnEditingTransaction", null);
     $("fn-transaction-form").reset();
+    updateFinanceCategoryOptions();
     $("fn-transaction-save").textContent = "Adicionar";
     show("fn-transaction-cancel", false);
   };

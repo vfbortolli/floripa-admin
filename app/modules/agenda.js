@@ -1,6 +1,6 @@
 import { state, setState } from "../app-state.js";
 import { show, say, setView, setActive } from "./ui.js";
-import { money, fmtDate, parseDate, nightsBetween, brDate, personName, reservableRooms, roomById, TYPES } from "./utils.js";
+import { money, fmtDate, parseDate, nightsBetween, brDate, personName, reservableRooms, roomById, whatsappUrl, TYPES } from "./utils.js";
 import { $ } from "./dom.js";
 import { getDb, uploadPaymentProof, cleanupUnlinkedPaymentProof } from "./db.js";
 import { canEdit } from "./auth.js";
@@ -237,6 +237,26 @@ export function renderResList() {
       wrapper.append(card);
     }
   }
+
+  const imagesByRoom = {
+    "1": ["quarto-1.1.avif", "quarto-1.2.avif"],
+    "2": ["quarto-2.1.avif"],
+    "3": ["quarto-3.1.avif"],
+  };
+  const images = imagesByRoom[roomNumber] ?? [];
+  if (images.length) {
+    const container = document.createElement("div");
+    container.className = "room-images-container";
+    for (const imageName of images) {
+      const image = document.createElement("img");
+      image.src = `espacos/${imageName}`;
+      image.className = "room-image";
+      image.alt = `${room?.name} - Foto`;
+      container.append(image);
+    }
+    wrapper.append(container);
+  }
+
   box.replaceChildren(wrapper);
 }
 
@@ -257,17 +277,15 @@ export function showReservationWhatsApp(targets, message, error) {
   } else {
     let invalidPhones = 0;
     for (const target of targets) {
-      const phone = String(target.phone ?? "").replace(/\D/g, "");
-      if (phone.length < 10 || phone.length > 15) {
+      const url = whatsappUrl(target.phone, message);
+      if (!url) {
         invalidPhones++;
         continue;
       }
 
-      const url = new URL(`https://wa.me/${phone}`);
-      url.searchParams.set("text", message);
       const link = document.createElement("a");
       link.className = "btn whatsapp-link";
-      link.href = url.href;
+      link.href = url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.textContent = `Abrir WhatsApp${target.name ? ` · ${target.name}` : ""}`;

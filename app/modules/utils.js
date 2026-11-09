@@ -12,6 +12,13 @@ export const nightsBetween = (a, b) => Math.round((parseDate(b) - parseDate(a)) 
 export const brDate = (s) => parseDate(s).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 export const money = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export const personName = (email) => state.people.find((p) => p.email === email)?.name || email;
+export const whatsappUrl = (phone, message) => {
+  const normalizedPhone = String(phone ?? "").replace(/\D/g, "");
+  if (normalizedPhone.length < 10 || normalizedPhone.length > 15) return null;
+  const url = new URL(`https://wa.me/${normalizedPhone}`);
+  url.searchParams.set("text", message);
+  return url.href;
+};
 
 export const TYPES = { socio: "Sócio", convidado: "Convidado" };
 
