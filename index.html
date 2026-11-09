@@ -43,10 +43,10 @@
           <tbody id="people-list"></tbody>
         </table>
         <form id="form-person" class="add person-form">
-          <input id="p-name" placeholder="Nome" required>
-          <input id="p-email" type="email" placeholder="E-mail (o mesmo do login)" required>
-          <input id="p-phone" type="tel" placeholder="Telefone (55 11 99999-9999)">
-          <select id="p-family" required></select>
+          <label class="person-field">Nome<input id="p-name" required></label>
+          <label class="person-field">E-mail<input id="p-email" type="email" placeholder="O mesmo do login" required></label>
+          <label class="person-field">Telefone<input id="p-phone" type="tel" placeholder="55 11 99999-9999"></label>
+          <label class="person-field">Família<select id="p-family" required></select></label>
           <label class="check"><input type="checkbox" id="p-resp"> Responsável</label>
           <label class="check"><input type="checkbox" id="p-admin"> Admin</label>
           <button type="submit">Cadastrar</button>
@@ -307,6 +307,18 @@
         <button type="submit" id="r-save">Salvar</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="whatsapp-dialog">
+    <div class="whatsapp-dialog-content">
+      <h2>Solicitação registrada</h2>
+      <p id="whatsapp-dialog-message"></p>
+      <div id="whatsapp-targets" class="whatsapp-targets"></div>
+      <div class="dialog-actions">
+        <span class="grow"></span>
+        <button type="button" id="whatsapp-close" class="secondary">Fechar</button>
+      </div>
+    </div>
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

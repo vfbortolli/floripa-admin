@@ -1648,34 +1648,57 @@ let formGuests = [];
 let removedIds = [];
 let readOnly = false;
 
-async function notifyResponsibleViaWhatsapp(reservationId, room, checkIn, checkOut) {
-  try {
-    // Find the family responsible for this personal room
-    const family = families.find((f) => f.id === room.family_id);
-    if (!family) return;
+function reservationWhatsAppMessage(room, checkIn, checkOut) {
+  const guestNames = formGuests.map((guest) => guest.name).join(", ");
+  const formatDate = (value) => parseDate(value).toLocaleDateString("pt-BR");
+  return [
+    `Olá! ${me.name || "Uma pessoa"} solicitou uma reserva para ${room.name}.`,
+    `Pessoas: ${guestNames}`,
+    `Entrada: ${formatDate(checkIn)}`,
+    `Saída: ${formatDate(checkOut)}`,
+    "Acesse o sistema para aprovar ou recusar:",
+    `${location.origin}${location.pathname}`,
+  ].join("\n");
+}
 
-    // Find all responsible people for this family with phone numbers
-    const responsibles = people.filter((p) => p.family_id === family.id && p.is_responsible && p.phone);
-    if (!responsibles.length) return;
+function showReservationWhatsApp(targets, message, error) {
+  const targetList = $("whatsapp-targets");
+  const status = $("whatsapp-dialog-message");
+  targetList.replaceChildren();
 
-    // Get guest names
-    const guestNames = formGuests.map((g) => g.name).join(", ");
+  if (error) {
+    status.textContent = `A solicitação foi salva, mas não foi possível carregar os telefones. Execute supabase/phase2o.sql no Supabase. Detalhe: ${error}`;
+  } else if (!targets.length) {
+    status.textContent = "A solicitação foi salva, mas não há responsável com telefone cadastrado para receber a mensagem.";
+  } else {
+    let invalidPhones = 0;
+    for (const target of targets) {
+      const phone = String(target.phone ?? "").replace(/\D/g, "");
+      if (phone.length < 10 || phone.length > 15) {
+        invalidPhones++;
+        continue;
+      }
 
-    // Send notification to each responsible person
-    for (const responsible of responsibles) {
-      const { error } = await db.rpc("send_whatsapp_notification", {
-        p_reservation_id: reservationId,
-        p_recipient_phone: responsible.phone,
-        p_guest_names: guestNames,
-        p_space_name: room.name,
-        p_check_in: checkIn,
-        p_check_out: checkOut,
-      });
-      if (error) console.error("Erro ao notificar via WhatsApp:", error);
+      const url = new URL(`https://wa.me/${phone}`);
+      url.searchParams.set("text", message);
+      const link = document.createElement("a");
+      link.className = "btn whatsapp-link";
+      link.href = url.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = `Abrir WhatsApp${target.name ? ` · ${target.name}` : ""}`;
+      targetList.append(link);
     }
-  } catch (err) {
-    console.error("Erro ao enviar notificação WhatsApp:", err);
+
+    status.textContent = targetList.childElementCount
+      ? "Escolha um responsável. A mensagem ficará preenchida no WhatsApp; confirme o envio por lá."
+      : "Nenhum telefone cadastrado está em um formato válido. Confira o DDI e o número na tela Pessoas.";
+    if (invalidPhones && targetList.childElementCount) {
+      status.textContent += " Alguns telefones precisam ser conferidos.";
+    }
   }
+
+  $("whatsapp-dialog").showModal();
 }
 
 
@@ -1800,6 +1823,7 @@ $("r-in").onchange = () => {
 };
 $("r-out").onchange = refreshForm;
 $("r-close").onclick = () => $("res-dialog").close();
+$("whatsapp-close").onclick = () => $("whatsapp-dialog").close();
 
 $("r-delete").onclick = async () => {
   if (!confirm("Cancelar esta reserva?")) return;
@@ -1875,14 +1899,21 @@ $("res-form").onsubmit = async (e) => {
       const { error } = await db.from("reservation_guests").update({ name: g.name, type: g.type, exempt: g.exempt }).eq("id", g.id);
       if (error) throw error;
     }
-    $("res-dialog").close();
-    
-    // If reservation is new and pending in a personal room, send WhatsApp notification to responsible
-    if (!editing && payload.status === "pending" && room.kind === "personal") {
-      await notifyResponsibleViaWhatsapp(id, room, check_in, check_out);
+
+    const shouldNotify = !editing && payload.status === "pending" && room.kind === "personal";
+    let whatsappTargets = [];
+    let whatsappError = null;
+    if (shouldNotify) {
+      const { data, error } = await db.rpc("get_reservation_whatsapp_targets", { p_reservation_id: id });
+      whatsappError = error?.message ?? null;
+      whatsappTargets = data ?? [];
     }
-    
+
+    $("res-dialog").close();
     loadAll();
+    if (shouldNotify) {
+      showReservationWhatsApp(whatsappTargets, reservationWhatsAppMessage(room, check_in, check_out), whatsappError);
+    }
   } catch (err) {
     say("r-msg", err.code === "23P01"
       ? "Esse quarto já está reservado em parte desse período. Escolha outras datas."
