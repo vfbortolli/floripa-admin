@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Manual de uso do sistema Casa de Praia: inventário, agenda, reservas, cobranças e financeiro.">
+  <title>Manual do sistema – Casa de Praia</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --teal: #0e7c86;
+      --teal-dark: #0a5c64;
+      --teal-soft: #e3f4f5;
+      --ink: #1f2933;
+      --muted: #52606d;
+      --line: #d9e2e8;
+      --paper: #fff;
+      --canvas: #f4f7f8;
+      --notice: #fff4d6;
+      --success: #e7f5e9;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 1.5rem; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 16px/1.65 "Segoe UI", Arial, sans-serif;
+    }
+    a { color: var(--teal-dark); }
+    .hero {
+      background: linear-gradient(135deg, var(--teal-dark), var(--teal));
+      color: #fff;
+      padding: 3.5rem 1.25rem;
+    }
+    .hero-inner, .layout { width: min(1120px, 100% - 2rem); margin: 0 auto; }
+    .hero h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.15; }
+    .hero p { max-width: 720px; margin: 1rem 0 0; font-size: 1.15rem; }
+    .hero a { color: #fff; }
+    .hero .back {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: .6rem 1rem;
+      border: 1px solid #ffffff99;
+      border-radius: .6rem;
+      text-decoration: none;
+    }
+    .layout { display: grid; grid-template-columns: 235px minmax(0, 1fr); gap: 1.5rem; padding: 1.5rem 0 4rem; }
+    nav {
+      align-self: start;
+      position: sticky;
+      top: 1rem;
+      padding: 1rem;
+      border: 1px solid var(--line);
+      border-radius: .8rem;
+      background: var(--paper);
+    }
+    nav strong { display: block; margin: 0 0 .4rem; }
+    nav a { display: block; padding: .35rem 0; text-decoration: none; }
+    nav a:hover, nav a:focus-visible { text-decoration: underline; }
+    main { min-width: 0; }
+    section, .intro {
+      margin: 0 0 1.25rem;
+      padding: clamp(1.1rem, 3vw, 2rem);
+      border: 1px solid var(--line);
+      border-radius: .9rem;
+      background: var(--paper);
+    }
+    h2 { margin: 0 0 .75rem; color: var(--teal-dark); font-size: 1.55rem; line-height: 1.3; }
+    h3 { margin: 1.3rem 0 .35rem; font-size: 1.1rem; }
+    p { margin: .55rem 0; }
+    ul, ol { padding-left: 1.35rem; }
+    li + li { margin-top: .35rem; }
+    .lead { font-size: 1.08rem; }
+    .note, .tip, .success {
+      margin: 1rem 0;
+      padding: .85rem 1rem;
+      border-radius: .65rem;
+    }
+    .note { background: var(--notice); }
+    .tip { background: var(--teal-soft); }
+    .success { background: var(--success); }
+    .login-shot {
+      display: block;
+      width: min(100%, 900px);
+      height: auto;
+      margin: 1rem auto .5rem;
+      border: 1px solid var(--line);
+      border-radius: .6rem;
+    }
+    .screen-shot {
+      display: block;
+      width: min(100%, 420px);
+      height: auto;
+      margin: 1rem auto .5rem;
+      border: 1px solid var(--line);
+      border-radius: .6rem;
+    }
+    .caption { color: var(--muted); font-size: .9rem; text-align: center; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
+    .card { padding: .9rem 1rem; border: 1px solid var(--line); border-radius: .7rem; }
+    .card strong { display: block; color: var(--teal-dark); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin: .8rem 0; }
+    th, td { padding: .65rem .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--teal-soft); }
+    code { padding: .1rem .3rem; border-radius: .25rem; background: #edf1f3; }
+    footer { padding: 1.5rem 1rem; color: var(--muted); text-align: center; }
+    @media (max-width: 760px) {
+      .hero { padding: 2.5rem 1rem; }
+      .hero-inner, .layout { width: min(100% - 1rem, 680px); }
+      .layout { display: block; padding-top: .5rem; }
+      nav { position: static; margin-bottom: .75rem; }
+      nav div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .75rem; }
+      .cards { grid-template-columns: 1fr; }
+      th, td { min-width: 120px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <h1>🏖️ Manual do sistema Casa de Praia</h1>
+      <p>Como entrar, consultar o inventário e a agenda, reservar quartos e entender as áreas administrativas.</p>
+      <a class="back" href="../">Voltar ao sistema</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="Índice do manual">
+      <strong>Neste manual</strong>
+      <div>
+        <a href="#acesso">Acesso</a>
+        <a href="#navegacao">Navegação</a>
+        <a href="#inventario">Inventário</a>
+        <a href="#agenda">Agenda e reservas</a>
+        <a href="#valores">Valores e diárias</a>
+        <a href="#cobranca">Cobrança</a>
+        <a href="#financeiro">Financeiro</a>
+        <a href="#administracao">Administração</a>
+        <a href="#privacidade">Privacidade e ajuda</a>
+      </div>
+    </nav>
+
+    <main>
+      <div class="intro">
+        <p class="lead">O sistema reúne o inventário da casa, a agenda de ocupação e as ferramentas administrativas. Ele funciona no navegador, no computador ou no celular; não é necessário instalar aplicativo.</p>
+        <p>Os menus e ações disponíveis variam conforme o perfil de acesso. As áreas de administração são exclusivas de administradores.</p>
+        <p>As capturas deste manual mostram a interface real em celular. Dados pessoais, reservas e valores foram ocultados nas imagens.</p>
+        <div class="success"><b>Layout testado:</b> 320, 390, 760 e 1024 px. A página não apresentou rolagem horizontal; até 760 px, menu e conteúdo passam a ficar empilhados.</div>
+      </div>
+
+      <section id="acesso">
+        <h2>1. Acesso ao sistema</h2>
+        <ol>
+          <li>Abra o endereço do sistema e entre com o e-mail que foi cadastrado para você.</li>
+          <li>Escolha <b>Entrar com Google</b> ou informe seu e-mail e toque em <b>Receber link por e-mail</b>.</li>
+          <li>No acesso por e-mail, abra a mensagem recebida e use o link para concluir a entrada. Se não encontrar a mensagem, confira o spam.</li>
+        </ol>
+        <figure>
+          <img class="login-shot" src="login.png" alt="Captura real da tela de entrada do sistema, com opções Google e link por e-mail">
+          <figcaption class="caption">Tela de entrada capturada no navegador. As telas internas exigem uma conta autorizada.</figcaption>
+        </figure>
+        <div class="note"><b>Não consegue entrar?</b> O acesso só é permitido para e-mails incluídos por um administrador. Se aparecer “Acesso não autorizado”, peça para confirmarem o endereço cadastrado e tente novamente com o mesmo e-mail.</div>
+      </section>
+
+      <section id="navegacao">
+        <h2>2. Navegação e perfis</h2>
+        <p>Depois de entrar, o menu lateral organiza as áreas. No celular, pode ser necessário abrir o grupo do menu para ver suas opções.</p>
+        <div class="cards">
+          <div class="card"><strong>Agenda</strong>Quartos reserváveis, calendário mensal e solicitações de quartos pessoais.</div>
+          <div class="card"><strong>Casa comunitária</strong>Inventário dos espaços compartilhados, como quartos, cozinha e sala.</div>
+          <div class="card"><strong>Quartos pessoais</strong>Inventário dos quartos associados às famílias.</div>
+          <div class="card"><strong>Administração</strong>Pessoas, valores, cobrança, painel financeiro, financeiro e histórico. Visível apenas para administradores.</div>
+        </div>
+        <p>Todos os usuários autorizados podem consultar inventário e agenda. Cada usuário pode editar as próprias reservas; responsáveis editam o inventário do quarto pessoal da sua família. Administradores editam o inventário comunitário e têm acesso às ferramentas administrativas.</p>
+      </section>
+
+      <section id="inventario">
+        <h2>3. Consultar e atualizar o inventário</h2>
+        <ol>
+          <li>Abra <b>Casa comunitária</b> ou <b>Quartos pessoais</b> e escolha o cômodo.</li>
+          <li>Consulte descrição, quantidade, estado e observações. Use <b>Buscar item...</b> para filtrar a lista.</li>
+          <li>Quem tem permissão de edição pode adicionar itens, ajustar quantidades, estado e observações. Responsáveis editam o quarto da própria família; administradores editam os espaços comunitários.</li>
+        </ol>
+        <p>Os estados indicam se o item está bom, precisa de reparo ou está inutilizável. Se as ferramentas de edição não aparecerem, a tela está em modo somente leitura para o seu perfil.</p>
+        <figure>
+          <img class="screen-shot" src="inventario-screen.png" alt="Tela real de inventário no celular, com busca e controles de edição">
+          <figcaption class="caption">Inventário aberto no celular. A lista de itens foi ocultada na captura.</figcaption>
+        </figure>
+        <div class="tip">Administradores e responsáveis podem importar uma lista de itens por CSV quando a opção <b>Importar CSV</b> estiver disponível no cômodo editável.</div>
+      </section>
+
+      <section id="agenda">
+        <h2>4. Consultar a agenda e fazer uma reserva</h2>
+        <ol>
+          <li>Abra <b>Agenda</b>, escolha um quarto e use as setas para mudar o mês.</li>
+          <li>Confira o calendário e a lista de reservas do mês. Uma reserva confirmada ocupa as noites entre a entrada e a saída; a noite da saída não conta.</li>
+          <li>Toque em <b>Nova reserva</b>, informe o quarto, a entrada e a saída, e adicione todas as pessoas que vão ficar.</li>
+          <li>Classifique cada pessoa como sócio ou convidado. Marque <b>Isento</b> apenas quando aplicável. O sistema mostra uma estimativa do total antes de salvar.</li>
+          <li>Inclua uma observação se necessário e salve ou envie a solicitação.</li>
+        </ol>
+        <figure>
+          <img class="screen-shot" src="agenda-screen.png" alt="Agenda real no celular, com navegação mensal e seleção de quartos">
+          <figcaption class="caption">Agenda no celular. As ocupações e os detalhes das reservas foram ocultados.</figcaption>
+        </figure>
+        <figure>
+          <img class="screen-shot" src="reserva-form.png" alt="Formulário real de nova reserva, com quarto, datas e opção de aluguel por plataforma">
+          <figcaption class="caption">Formulário de reserva aberto. Nenhum hóspede foi incluído nesta captura.</figcaption>
+        </figure>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tipo de quarto</th><th>O que acontece ao salvar</th></tr></thead>
+            <tbody>
+              <tr><td>Quartos comunitários reserváveis (1, 2 e 3)</td><td>A reserva fica confirmada na hora se não houver conflito com outra reserva confirmada.</td></tr>
+              <tr><td>Quarto pessoal de outra família</td><td>O pedido fica pendente e não bloqueia as datas até o responsável daquela família ou um administrador aprovar.</td></tr>
+              <tr><td>Quarto pessoal da própria família (responsável) ou reserva feita por administrador</td><td>Fica confirmada se não houver conflito.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Pedidos pendentes e recusados aparecem na seção <b>Solicitações de quartos pessoais</b>. Um indicador no menu Agenda sinaliza pedidos que aguardam a ação do responsável. Não são enviados avisos por e-mail pelo sistema.</p>
+        <p>O responsável do quarto pessoal ou um administrador pode aprovar ou recusar um pedido. Se a aprovação conflitar com uma reserva confirmada, apenas um administrador pode decidir substituí-la. O dono da reserva ou um administrador pode editar ou cancelar uma reserva.</p>
+        <div class="note"><b>Bloqueio por aluguel de plataforma:</b> administradores podem criar uma reserva do tipo <i>Aluguel por plataforma</i>. Ela bloqueia o quarto sem cadastrar hóspedes nem gerar cobranças.</div>
+      </section>
+
+      <section id="valores">
+        <h2>5. Valores e cálculo das diárias</h2>
+        <p>O total é calculado por pessoa e por noite, usando as tarifas de sócio e convidado configuradas pelo administrador. Pessoas marcadas como isentas não geram cobrança.</p>
+        <p><b>Noites cobradas = data de saída − data de entrada.</b> Por exemplo, entrada no dia 10 e saída no dia 13 corresponde a três noites: as noites de 10, 11 e 12.</p>
+        <ul>
+          <li>O sistema usa a tarifa vigente ao criar a cobrança. Uma cobrança já criada conserva seu valor, mesmo que a tarifa seja alterada depois.</li>
+          <li>Alterar o tipo de uma pessoa entre sócio e convidado recalcula a tarifa daquela cobrança.</li>
+          <li>A seção <b>Valores</b> também permite configurar a mensalidade padrão de cada ano. O valor definido para o ano vale para todas as famílias e meses daquele ano.</li>
+        </ul>
+        <p>As tarifas e os valores anuais podem ser consultados e alterados por administradores em <b>Administração → Valores</b>.</p>
+        <figure>
+          <img class="screen-shot" src="valores-admin.png" alt="Tela administrativa Valores no celular, sem exibir os valores cadastrados">
+          <figcaption class="caption">Tela Valores; os campos com os valores cadastrados foram ocultados.</figcaption>
+        </figure>
+      </section>
+
+      <section id="cobranca">
+        <h2>6. Cobrança e comprovantes</h2>
+        <p>A tela <b>Cobrança</b> reúne cobranças de reservas confirmadas com saída no mês selecionado, agrupadas por pessoa. Pessoas isentas não entram na cobrança. Use as setas para consultar outros meses ou <b>Exportar CSV</b> para baixar a lista.</p>
+        <h3>Registrar um pagamento</h3>
+        <ol>
+          <li>Selecione uma ou mais cobranças correspondentes ao pagamento.</li>
+          <li>Escolha o comprovante de transferência e envie para anexar o documento e dar baixa nas cobranças selecionadas.</li>
+          <li>O comprovante pode ser PDF, JPG ou PNG, com até 10 MB. O mesmo arquivo pode estar associado a mais de uma diária.</li>
+        </ol>
+        <p>O envio e a visualização de comprovantes são exclusivos de administradores. O sistema exige um comprovante associado para registrar novas baixas; pagamentos antigos podem aparecer sem comprovante porque foram registrados antes dessa exigência.</p>
+        <figure>
+          <img class="screen-shot" src="cobranca-admin.png" alt="Tela administrativa Cobrança no celular, com mês e opção de exportar CSV">
+          <figcaption class="caption">Tela Cobrança; a lista de cobranças foi ocultada.</figcaption>
+        </figure>
+      </section>
+
+      <section id="financeiro">
+        <h2>7. Painel financeiro e Financeiro</h2>
+        <p>As duas áreas são administrativas e têm objetivos diferentes:</p>
+        <div class="cards">
+          <div class="card"><strong>Painel financeiro</strong>Resumo anual por mês, com receitas, despesas e balanço. Escolha um mês para abrir o detalhamento.</div>
+          <div class="card"><strong>Financeiro</strong>Detalhamento mensal de mensalidades por família, diárias, outras receitas, despesas e categorias.</div>
+        </div>
+        <h3>Mensalidades</h3>
+        <p>O valor previsto é o padrão anual definido em <b>Valores</b>. O administrador acompanha o recebido por família e mês. Para recebimentos parciais, é possível anexar vários comprovantes a uma mensalidade; anexe o documento antes de registrar o valor recebido.</p>
+        <h3>Diárias</h3>
+        <p>Os totais importados são calculados a partir das reservas confirmadas e distribuídos por família conforme os hóspedes e o criador da reserva. O ajuste mensal substitui o valor exibido no financeiro daquela família, sem alterar a reserva nem a cobrança original.</p>
+        <h3>Outras receitas, despesas e categorias</h3>
+        <p>Cadastre uma categoria e depois registre receitas ou despesas com data, descrição e valor. Os lançamentos podem ser editados ou removidos conforme as opções exibidas na tela.</p>
+        <figure>
+          <img class="screen-shot" src="painel-financeiro.png" alt="Painel financeiro real no celular, com consulta por ano">
+          <figcaption class="caption">Painel financeiro; valores e gráficos foram ocultados.</figcaption>
+        </figure>
+        <figure>
+          <img class="screen-shot" src="financeiro-screen.png" alt="Tela Financeiro real no celular, com navegação mensal e seções expansíveis">
+          <figcaption class="caption">Financeiro com as seções de detalhamento recolhidas e os dados financeiros ocultados.</figcaption>
+        </figure>
+      </section>
+
+      <section id="administracao">
+        <h2>8. Pessoas, histórico e backup</h2>
+        <h3>Pessoas</h3>
+        <p>Administradores cadastram quem pode entrar, usando o mesmo e-mail que a pessoa utilizará no login. Cada cadastro pode ser associado a uma família e definido como responsável ou administrador. O sistema impede que o administrador remova ou rebaixe a própria conta.</p>
+        <figure>
+          <img class="screen-shot" src="pessoas-admin.png" alt="Tela administrativa Pessoas no celular, com formulário de cadastro e backup">
+          <figcaption class="caption">Tela Pessoas; os registros e e-mails cadastrados foram ocultados.</figcaption>
+        </figure>
+        <h3>Histórico</h3>
+        <p>O histórico registra alterações em inventário, reservas, pessoas, valores e dados financeiros. Administradores podem filtrar por tipo de registro e carregar mais resultados.</p>
+        <h3>Backup</h3>
+        <p>Em <b>Pessoas → Baixar backup</b>, um administrador baixa um arquivo JSON com os dados do sistema, incluindo dados pessoais e metadados de comprovantes. Guarde o arquivo em local privado.</p>
+        <div class="note">O backup JSON não contém os arquivos de comprovante armazenados no Storage. Para uma restauração completa, os arquivos do bucket privado também precisam ser baixados e restaurados separadamente, preservando seus caminhos.</div>
+      </section>
+
+      <section id="privacidade">
+        <h2>9. Privacidade e ajuda</h2>
+        <ul>
+          <li>Somente e-mails cadastrados podem entrar; peça a um administrador para corrigir o cadastro se necessário.</li>
+          <li>Todos os usuários autorizados podem consultar inventário e agenda, mas cobranças e informações financeiras são restritas aos perfis permitidos.</li>
+          <li>Não compartilhe arquivos de backup: eles podem conter e-mails e outros dados pessoais.</li>
+          <li>Se uma opção não aparecer, provavelmente seu perfil não tem permissão para aquela ação. Procure um administrador antes de repetir ou alterar uma operação.</li>
+        </ul>
+        <p>Para voltar ao aplicativo, use <a href="../">Voltar ao sistema</a>. Dúvidas sobre cadastro, reservas ou acesso devem ser encaminhadas a um administrador da casa.</p>
+      </section>
+    </main>
+  </div>
+  <footer>Casa de Praia · Manual de uso</footer>
+</body>
+</html>

@@ -2,6 +2,9 @@
 
 Site estático (HTML/JS) + Supabase (banco e login). Custo zero.
 
+## Manual de uso
+Consulte o [manual do sistema](docs/manual.html) para instruções sobre acesso, inventário, agenda, reservas, cobranças e áreas administrativas.
+
 ## Configuração
 1. Supabase > SQL Editor: cole e execute [supabase/schema.sql](supabase/schema.sql).
 2. Supabase > Authentication > Providers: habilite **Email** (link mágico) e **Google**.
