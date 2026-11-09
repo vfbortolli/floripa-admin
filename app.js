@@ -15,6 +15,7 @@ let myReservationIds = new Set();
 
 const show = (id, on) => $(id).classList.toggle("hidden", !on);
 const say = (id, text) => { $(id).textContent = text || ""; };
+const canManageFinance = () => Boolean(me?.is_admin);
 const PAYMENT_PROOFS_BUCKET = "payment-proofs";
 const PAYMENT_PROOF_TYPES = new Map([
   ["application/pdf", "pdf"],
@@ -186,6 +187,19 @@ function renderNav() {
       items.append(b);
     }
   }
+  const financeItems = addGroup("Financeiro", "💰", "nav-finance-group");
+  const dashboard = document.createElement("button");
+  dashboard.className = "nav-item";
+  dashboard.textContent = "Painel financeiro";
+  dashboard.id = "nav-dashboard";
+  dashboard.onclick = showFinanceDashboard;
+  const finance = document.createElement("button");
+  finance.className = "nav-item";
+  finance.textContent = "Detalhamento";
+  finance.id = "nav-finance";
+  finance.onclick = showFinance;
+  financeItems.append(dashboard, finance);
+
   if (me.is_admin) {
     const items = addGroup("Administração", "⚙️", "nav-admin");
     const peopleBtn = document.createElement("button");
@@ -203,18 +217,7 @@ function renderNav() {
     bl.textContent = "Cobrança";
     bl.id = "nav-billing";
     bl.onclick = showBilling;
-    const fn = document.createElement("button");
-    fn.className = "nav-item";
-    fn.textContent = "Financeiro";
-    fn.id = "nav-finance";
-    fn.onclick = showFinance;
-    const dashboard = document.createElement("button");
-    dashboard.className = "nav-item";
-    dashboard.textContent = "Painel financeiro";
-    dashboard.id = "nav-dashboard";
-    dashboard.onclick = showFinanceDashboard;
     items.append(peopleBtn, bl, rt);
-    items.append(dashboard, fn);
     const hs = document.createElement("button");
     hs.className = "nav-item";
     hs.textContent = "Histórico";
@@ -790,16 +793,16 @@ let fnEditingTransaction = null;
 const fnPeriod = () => `${fnYear}-${String(fnMonth + 1).padStart(2, "0")}-01`;
 const fnMonthKey = (value) => String(value).slice(0, 7);
 async function showFinance() {
-  if (!me?.is_admin) return;
   current = null;
   setView("finance");
   setActive((b) => b.id === "nav-finance");
+  show("fn-transaction-form", canManageFinance());
+  show("fn-category-form", canManageFinance());
   $("fn-date").value = fnPeriod();
   await loadFinance();
 }
 
 async function showFinanceDashboard() {
-  if (!me?.is_admin) return;
   current = null;
   setView("dashboard");
   setActive((b) => b.id === "nav-dashboard");
@@ -811,6 +814,8 @@ async function loadFinance() {
   $("fn-year").value = fnYear;
   $("fn-dashboard-year").value = fnYear;
   $("fn-dashboard-year-label").textContent = String(fnYear);
+  show("fn-transaction-form", canManageFinance());
+  show("fn-category-form", canManageFinance());
   say("fn-msg", ""); say("fn-dashboard-msg", "");
   const [categories, memberships, membershipRate, transactions, daily, adjustments] = await Promise.all([
     db.from("finance_categories").select("*").order("kind").order("name"),
@@ -828,7 +833,7 @@ async function loadFinance() {
   fnCategories = categories.data ?? [];
   fnMemberships = memberships.data ?? [];
   fnMembershipReceipts = new Map();
-  if (fnMemberships.length) {
+  if (canManageFinance() && fnMemberships.length) {
     const { data: links, error: receiptError } = await db.from("payment_receipt_memberships")
       .select("membership_id, payment_receipts(id, object_path, original_name, uploaded_at)")
       .in("membership_id", fnMemberships.map((r) => r.id));
@@ -999,23 +1004,31 @@ function renderFinanceMemberships(data, period) {
     const row = document.createElement("tr");
     const name = document.createElement("th");
     name.scope = "row"; name.textContent = family.name; row.append(name);
-    const inputs = [];
     const expected = document.createElement("td");
     expected.className = "num";
     expected.dataset.label = "Previsto";
     expected.textContent = money(expectedAmount);
     row.append(expected);
+    const inputs = [];
     for (const [value, label, fieldLabel] of [
       [saved?.received_amount ?? "0", `Recebido de ${family.name}`, "Recebido"],
       [saved?.paid_at ?? "", `Data do pagamento de ${family.name}`, "Data do pagamento"],
     ]) {
       const cell = document.createElement("td");
       cell.dataset.label = fieldLabel;
-      const input = document.createElement("input");
-      input.type = label.startsWith("Data") ? "date" : "number";
-      if (input.type === "number") { input.min = "0"; input.step = "0.01"; }
-      input.value = value; input.setAttribute("aria-label", label);
-      inputs.push(input); cell.append(input); row.append(cell);
+      if (canManageFinance()) {
+        const input = document.createElement("input");
+        input.type = label.startsWith("Data") ? "date" : "number";
+        if (input.type === "number") { input.min = "0"; input.step = "0.01"; }
+        input.value = value; input.setAttribute("aria-label", label);
+        inputs.push(input);
+        cell.append(input);
+      } else {
+        cell.textContent = label.startsWith("Data")
+          ? value ? parseDate(value).toLocaleDateString("pt-BR") : "—"
+          : money(Number(value));
+      }
+      row.append(cell);
     }
     const paid = expectedAmount > 0 && Number(saved?.received_amount ?? 0) >= expectedAmount;
     const status = document.createElement("td");
@@ -1023,89 +1036,99 @@ function renderFinanceMemberships(data, period) {
     const receipts = saved ? fnMembershipReceipts.get(saved.id) ?? [] : [];
     status.className = paid ? "finance-paid" : "finance-pending";
     status.textContent = paid
-      ? receipts.length ? "Pago" : "Pago · sem comprovante"
+      ? canManageFinance() && !receipts.length ? "Pago · sem comprovante" : "Pago"
       : "Pendente";
     row.append(status);
     const proofsCell = document.createElement("td");
     proofsCell.dataset.label = "Comprovantes";
     const proofList = document.createElement("div");
     proofList.className = "finance-proof-list";
-    for (const receipt of receipts) {
-      const open = document.createElement("button");
-      open.type = "button";
-      open.className = "secondary";
-      open.textContent = receipt.original_name;
-      open.onclick = () => openPaymentProof(receipt, "fn-msg");
-      proofList.append(open);
+    if (canManageFinance()) {
+      for (const receipt of receipts) {
+        const open = document.createElement("button");
+        open.type = "button";
+        open.className = "secondary";
+        open.textContent = receipt.original_name;
+        open.onclick = () => openPaymentProof(receipt, "fn-msg");
+        proofList.append(open);
+      }
+      const proofInput = document.createElement("input");
+      proofInput.type = "file";
+      proofInput.accept = "application/pdf,image/jpeg,image/png";
+      proofInput.multiple = true;
+      proofInput.setAttribute("aria-label", `Adicionar comprovantes de ${family.name}`);
+      proofsCell.append(proofList, proofInput);
+    } else {
+      proofsCell.textContent = "Restritos a administradores";
     }
-    const proofInput = document.createElement("input");
-    proofInput.type = "file";
-    proofInput.accept = "application/pdf,image/jpeg,image/png";
-    proofInput.multiple = true;
-    proofInput.setAttribute("aria-label", `Adicionar comprovantes de ${family.name}`);
-    proofsCell.append(proofList, proofInput);
     row.append(proofsCell);
     const action = document.createElement("td");
     action.dataset.label = "Ação";
-    const save = document.createElement("button");
-    save.type = "button"; save.className = "secondary"; save.textContent = "Salvar";
-    save.onclick = async () => {
-      if (inputs[0].value === "" || !Number.isFinite(Number(inputs[0].value)) || Number(inputs[0].value) < 0) {
-        say("fn-msg", "Informe um valor recebido válido (zero ou maior).");
-        return;
-      }
-      save.disabled = true;
-      const receivedAmount = Number(inputs[0].value);
-      const files = [...(proofInput.files ?? [])];
-      let membershipId = saved?.id;
-      if (!membershipId && files.length) {
-        const { data: created, error: createError } = await db.from("finance_memberships").upsert({
-          family_id: family.id, period_month: period,
-          expected_amount: expectedAmount, received_amount: 0, paid_at: null,
-        }, { onConflict: "family_id,period_month" }).select("id").single();
-        if (createError) { say("fn-msg", createError.message); save.disabled = false; return; }
-        membershipId = created.id;
-      }
-      if (membershipId) {
-        for (const file of files) {
-          const { data: receipt, error: uploadError } = await uploadPaymentProof(file);
-          if (uploadError) {
-            await loadFinance();
-            say("fn-msg", `Não foi possível concluir o envio: ${uploadError}`);
-            save.disabled = false;
-            return;
-          }
-          const { error: linkError } = await db.from("payment_receipt_memberships")
-            .insert({ receipt_id: receipt.id, membership_id: membershipId });
-          if (linkError) {
-            const cleanupErrors = await cleanupUnlinkedPaymentProof(receipt);
-            await loadFinance();
-            say("fn-msg", [`Não foi possível vincular o comprovante: ${linkError.message}`, ...cleanupErrors].join(" "));
-            save.disabled = false;
-            return;
+    if (canManageFinance()) {
+      const proofInput = proofsCell.querySelector('input[type="file"]');
+      const save = document.createElement("button");
+      save.type = "button"; save.className = "secondary"; save.textContent = "Salvar";
+      save.onclick = async () => {
+        if (inputs[0].value === "" || !Number.isFinite(Number(inputs[0].value)) || Number(inputs[0].value) < 0) {
+          say("fn-msg", "Informe um valor recebido válido (zero ou maior).");
+          return;
+        }
+        save.disabled = true;
+        const receivedAmount = Number(inputs[0].value);
+        const files = [...(proofInput.files ?? [])];
+        let membershipId = saved?.id;
+        if (!membershipId && files.length) {
+          const { data: created, error: createError } = await db.from("finance_memberships").upsert({
+            family_id: family.id, period_month: period,
+            expected_amount: expectedAmount, received_amount: 0, paid_at: null,
+          }, { onConflict: "family_id,period_month" }).select("id").single();
+          if (createError) { say("fn-msg", createError.message); save.disabled = false; return; }
+          membershipId = created.id;
+        }
+        if (membershipId) {
+          for (const file of files) {
+            const { data: receipt, error: uploadError } = await uploadPaymentProof(file);
+            if (uploadError) {
+              await loadFinance();
+              say("fn-msg", `Não foi possível concluir o envio: ${uploadError}`);
+              save.disabled = false;
+              return;
+            }
+            const { error: linkError } = await db.from("payment_receipt_memberships")
+              .insert({ receipt_id: receipt.id, membership_id: membershipId });
+            if (linkError) {
+              const cleanupErrors = await cleanupUnlinkedPaymentProof(receipt);
+              await loadFinance();
+              say("fn-msg", [`Não foi possível vincular o comprovante: ${linkError.message}`, ...cleanupErrors].join(" "));
+              save.disabled = false;
+              return;
+            }
           }
         }
-      }
-      const availableReceipts = (saved ? fnMembershipReceipts.get(saved.id) ?? [] : []).length + files.length;
-      if (receivedAmount > 0 && !availableReceipts) {
-        say("fn-msg", `Anexe um comprovante para registrar o recebimento de ${family.name}.`);
-        save.disabled = false;
-        return;
-      }
-      const { error } = await db.from("finance_memberships").upsert({
-        family_id: family.id, period_month: period,
-        expected_amount: expectedAmount, received_amount: receivedAmount,
-        paid_at: receivedAmount > 0 ? inputs[1].value || null : null,
-      }, { onConflict: "family_id,period_month" });
-      if (error) {
+        const availableReceipts = (saved ? fnMembershipReceipts.get(saved.id) ?? [] : []).length + files.length;
+        if (receivedAmount > 0 && !availableReceipts) {
+          say("fn-msg", `Anexe um comprovante para registrar o recebimento de ${family.name}.`);
+          save.disabled = false;
+          return;
+        }
+        const { error } = await db.from("finance_memberships").upsert({
+          family_id: family.id, period_month: period,
+          expected_amount: expectedAmount, received_amount: receivedAmount,
+          paid_at: receivedAmount > 0 ? inputs[1].value || null : null,
+        }, { onConflict: "family_id,period_month" });
+        if (error) {
+          await loadFinance();
+          say("fn-msg", `Comprovante(s) anexado(s), mas o recebimento não foi salvo: ${error.message}`);
+          save.disabled = false;
+          return;
+        }
         await loadFinance();
-        say("fn-msg", `Comprovante(s) anexado(s), mas o recebimento não foi salvo: ${error.message}`);
-        save.disabled = false;
-        return;
-      }
-      await loadFinance();
-    };
-    action.append(save); row.append(action); membershipRows.append(row);
+      };
+      action.append(save);
+    } else {
+      action.textContent = "—";
+    }
+    row.append(action); membershipRows.append(row);
   }
 }
 
@@ -1147,27 +1170,32 @@ function renderFinanceDaily(data, period) {
     row.append(finalAmount);
     const action = document.createElement("td");
     action.dataset.label = "Ajuste";
-    const input = document.createElement("input");
-    input.type = "number"; input.min = "0"; input.step = "0.01"; input.placeholder = "Sem ajuste";
-    input.value = adjustment ? adjustment.amount : "";
-    input.setAttribute("aria-label", `Ajuste de diárias para ${family.name}`);
-    const save = document.createElement("button");
-    save.type = "button"; save.className = "secondary"; save.textContent = "Salvar";
-    save.onclick = async () => {
-      if (input.value !== "" && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0)) {
-        say("fn-msg", "O ajuste precisa ser zero ou maior.");
-        return;
-      }
-      save.disabled = true;
-      const result = input.value === ""
-        ? await db.from("finance_daily_adjustments").delete().eq("family_id", family.id).eq("period_month", period)
-        : await db.from("finance_daily_adjustments").upsert({
-          family_id: family.id, period_month: period, amount: Number(input.value),
-        }, { onConflict: "family_id,period_month" });
-      if (result.error) { say("fn-msg", result.error.message); save.disabled = false; return; }
-      await loadFinance();
-    };
-    action.append(input, save); row.append(action); dailyRows.append(row);
+    if (!canManageFinance()) {
+      action.textContent = adjustment ? `Ajuste: ${money(Number(adjustment.amount))}` : "Sem ajuste";
+    } else {
+      const input = document.createElement("input");
+      input.type = "number"; input.min = "0"; input.step = "0.01"; input.placeholder = "Sem ajuste";
+      input.value = adjustment ? adjustment.amount : "";
+      input.setAttribute("aria-label", `Ajuste de diárias para ${family.name}`);
+      const save = document.createElement("button");
+      save.type = "button"; save.className = "secondary"; save.textContent = "Salvar";
+      save.onclick = async () => {
+        if (input.value !== "" && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0)) {
+          say("fn-msg", "O ajuste precisa ser zero ou maior.");
+          return;
+        }
+        save.disabled = true;
+        const result = input.value === ""
+          ? await db.from("finance_daily_adjustments").delete().eq("family_id", family.id).eq("period_month", period)
+          : await db.from("finance_daily_adjustments").upsert({
+            family_id: family.id, period_month: period, amount: Number(input.value),
+          }, { onConflict: "family_id,period_month" });
+        if (result.error) { say("fn-msg", result.error.message); save.disabled = false; return; }
+        await loadFinance();
+      };
+      action.append(input, save);
+    }
+    row.append(action); dailyRows.append(row);
   }
 }
 
@@ -1202,26 +1230,31 @@ function renderFinanceTransactions() {
     }
     const actions = document.createElement("td");
     actions.dataset.label = "Ações";
-    const edit = document.createElement("button");
-    edit.type = "button"; edit.className = "link"; edit.textContent = "Editar";
-    edit.onclick = () => {
-      fnEditingTransaction = transaction.id;
-      $("fn-kind").value = transaction.kind; updateFinanceCategoryOptions();
-      $("fn-date").value = transaction.transaction_date;
-      $("fn-category").value = transaction.category_id;
-      $("fn-description").value = transaction.description; $("fn-amount").value = transaction.amount;
-      $("fn-transaction-save").textContent = "Salvar";
-      show("fn-transaction-cancel", true); $("fn-description").focus();
-    };
-    const remove = document.createElement("button");
-    remove.type = "button"; remove.className = "danger-text"; remove.textContent = "Excluir";
-    remove.onclick = async () => {
-      if (!confirm("Excluir este lançamento financeiro?")) return;
-      const { error } = await db.from("finance_transactions").delete().eq("id", transaction.id);
-      if (error) return say("fn-msg", error.message);
-      await loadFinance();
-    };
-    actions.append(edit, remove); row.append(actions); list.append(row);
+    if (canManageFinance()) {
+      const edit = document.createElement("button");
+      edit.type = "button"; edit.className = "link"; edit.textContent = "Editar";
+      edit.onclick = () => {
+        fnEditingTransaction = transaction.id;
+        $("fn-kind").value = transaction.kind; updateFinanceCategoryOptions();
+        $("fn-date").value = transaction.transaction_date;
+        $("fn-category").value = transaction.category_id;
+        $("fn-description").value = transaction.description; $("fn-amount").value = transaction.amount;
+        $("fn-transaction-save").textContent = "Salvar";
+        show("fn-transaction-cancel", true); $("fn-description").focus();
+      };
+      const remove = document.createElement("button");
+      remove.type = "button"; remove.className = "danger-text"; remove.textContent = "Excluir";
+      remove.onclick = async () => {
+        if (!confirm("Excluir este lançamento financeiro?")) return;
+        const { error } = await db.from("finance_transactions").delete().eq("id", transaction.id);
+        if (error) return say("fn-msg", error.message);
+        await loadFinance();
+      };
+      actions.append(edit, remove);
+    } else {
+      actions.textContent = "—";
+    }
+    row.append(actions); list.append(row);
   }
   if (!rows.length) {
     const row = document.createElement("tr"), cell = document.createElement("td");
@@ -1238,24 +1271,29 @@ function renderFinanceCategories() {
     row.className = "finance-category";
     const label = document.createElement("span");
     label.textContent = `${category.kind === "income" ? "Receita" : "Despesa"} · ${category.name}${category.active ? "" : " (inativa)"}`;
-    const rename = document.createElement("button");
-    rename.type = "button"; rename.className = "secondary"; rename.textContent = "Renomear";
-    rename.onclick = async () => {
-      const name = prompt("Novo nome da categoria:", category.name)?.trim();
-      if (!name || name === category.name) return;
-      const { error } = await db.from("finance_categories").update({ name }).eq("id", category.id);
-      if (error) return say("fn-msg", error.message);
-      await loadFinance();
-    };
-    const toggle = document.createElement("button");
-    toggle.type = "button"; toggle.className = "secondary";
-    toggle.textContent = category.active ? "Desativar" : "Ativar";
-    toggle.onclick = async () => {
-      const { error } = await db.from("finance_categories").update({ active: !category.active }).eq("id", category.id);
-      if (error) return say("fn-msg", error.message);
-      await loadFinance();
-    };
-    row.append(label, rename, toggle); box.append(row);
+    if (canManageFinance()) {
+      const rename = document.createElement("button");
+      rename.type = "button"; rename.className = "secondary"; rename.textContent = "Renomear";
+      rename.onclick = async () => {
+        const name = prompt("Novo nome da categoria:", category.name)?.trim();
+        if (!name || name === category.name) return;
+        const { error } = await db.from("finance_categories").update({ name }).eq("id", category.id);
+        if (error) return say("fn-msg", error.message);
+        await loadFinance();
+      };
+      const toggle = document.createElement("button");
+      toggle.type = "button"; toggle.className = "secondary";
+      toggle.textContent = category.active ? "Desativar" : "Ativar";
+      toggle.onclick = async () => {
+        const { error } = await db.from("finance_categories").update({ active: !category.active }).eq("id", category.id);
+        if (error) return say("fn-msg", error.message);
+        await loadFinance();
+      };
+      row.append(label, rename, toggle);
+    } else {
+      row.append(label);
+    }
+    box.append(row);
   }
 }
 

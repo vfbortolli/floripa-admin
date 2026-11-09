@@ -118,7 +118,7 @@
           <label class="finance-year">Ano <input id="fn-dashboard-year" type="number" min="1900" max="9998" step="1"></label>
           <button id="fn-dashboard-load" class="secondary">Consultar</button>
         </div>
-        <p class="msg">Visão geral das receitas, despesas e do balanço da casa. Selecione um mês para ver os detalhes.</p>
+        <p class="msg">Visão geral das receitas, despesas e do balanço da casa. Todos os usuários autorizados podem consultar; somente administradores podem alterar dados financeiros. Selecione um mês para ver os detalhes.</p>
         <section class="finance-annual" aria-label="Resumo financeiro do ano">
           <h3 class="sub">Meses de <span id="fn-dashboard-year-label"></span></h3>
           <div id="fn-annual-grid" class="finance-annual-grid"></div>
@@ -156,7 +156,7 @@
           <label class="finance-year">Ano <input id="fn-year" type="number" min="1900" max="9998" step="1"></label>
           <button id="fn-load" class="secondary">Consultar</button>
         </div>
-        <p class="msg">Receitas e despesas da casa. Diárias calculadas a partir das reservas confirmadas e distribuídas pelas noites de cada mês.</p>
+        <p class="msg">Consulta de receitas e despesas da casa. Todos os usuários autorizados podem ver os detalhes; somente administradores podem alterar os dados. Diárias calculadas a partir das reservas confirmadas e distribuídas pelas noites de cada mês.</p>
         <p id="fn-msg" class="msg"></p>
         <h3 class="sub">Detalhe do mês <span id="fn-month-label"></span></h3>
         <div class="toolbar finance-month-toolbar">
@@ -166,7 +166,7 @@
 
         <details class="finance-section">
           <summary>Mensalidades por família</summary>
-          <p class="msg">O previsto vale para todas as famílias e meses do ano. Configure o valor padrão anual no menu Valores. Anexe os comprovantes dos pagamentos (aceita vários para pagamentos parciais) antes de registrar qualquer valor recebido.</p>
+          <p class="msg">O previsto vale para todas as famílias e meses do ano. O recebimento é exibido para consulta. Somente administradores podem registrar pagamentos e acessar comprovantes; anexe o comprovante antes de registrar qualquer valor recebido.</p>
           <div class="finance-table-wrap">
             <table class="finance-table">
               <thead><tr><th>Família</th><th>Previsto</th><th>Recebido</th><th>Data do pagamento</th><th>Status</th><th>Comprovantes</th><th></th></tr></thead>
@@ -177,7 +177,7 @@
 
         <details class="finance-section">
           <summary>Diárias por família</summary>
-          <p class="msg">O valor importado é somente leitura. Ajustes substituem o total financeiro da família no mês e não alteram as reservas.</p>
+          <p class="msg">O valor importado é somente leitura. Administradores podem fazer ajustes, que substituem o total financeiro da família no mês sem alterar as reservas.</p>
           <div class="finance-table-wrap">
             <table class="finance-table">
               <thead><tr><th>Família</th><th>Importado das reservas</th><th>Valor no financeiro</th><th>Ajuste</th></tr></thead>

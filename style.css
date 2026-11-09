@@ -211,14 +211,18 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
 .finance-section > .msg { margin-top: 8px; margin-bottom: 12px; }
 
 @media (max-width: 760px) {
-  header { padding: 12px 16px; }
+  header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  header > span { min-width: 0; max-width: 100%; flex-wrap: wrap; justify-content: flex-end; text-align: right; }
+  #who { min-width: 0; overflow-wrap: anywhere; }
   .layout { flex-direction: column; padding: 12px; gap: 12px; align-items: stretch; }
   nav {
     width: 100%; position: static; display: block; overflow: visible; padding: 8px;
   }
   nav .nav-item, nav .nav-group-toggle { white-space: nowrap; }
-  main { padding: 14px; }
+  main { width: 100%; min-width: 0; padding: 14px; }
   .toolbar h2 { font-size: 19px; }
+  .toolbar > * { min-width: 0; }
+  input, select, button { max-width: 100%; }
   #inventory table, #inventory tbody { display: block; width: 100%; }
   #inventory thead { display: none; }
   #inventory tr {
@@ -258,13 +262,16 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
   .add input:first-child { flex-basis: 100%; }
   .finance-annual-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .finance-month-card { padding: 12px; }
+  .finance-month-metric { min-width: 0; flex-wrap: wrap; }
+  .finance-month-metric-value { white-space: normal; overflow-wrap: anywhere; }
   .finance-breakdown-grid { grid-template-columns: 1fr; gap: 10px; }
-  .finance-dashboard-detail-heading { align-items: flex-start; }
-  .finance-dashboard-balance { text-align: right; }
+  .finance-dashboard-detail-heading { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .finance-dashboard-balance { text-align: left; }
   .finance-form select, .finance-form input, .finance-form button { flex: 1 1 100%; }
   .finance-category { align-items: flex-start; flex-wrap: wrap; }
   .finance-category span { flex-basis: 100%; }
   .add input[type=number] { flex: 1; }
+  .dialog-actions { flex-wrap: wrap; }
 }
 
 @media (max-width: 1100px) {
@@ -301,10 +308,6 @@ th:nth-child(4), th:nth-child(5) { text-align: left; }
 @media (min-width: 1101px) {
   #fn-daily td:last-child { display: flex; align-items: center; gap: 8px; }
   #fn-daily td:last-child input { width: 110px; min-width: 110px; }
-}
-
-@media (max-width: 380px) {
-  .finance-annual-grid { grid-template-columns: 1fr; }
 }
 
 /* Agenda */
@@ -401,4 +404,13 @@ dialog::backdrop { background: rgba(16, 24, 40, .45); }
 @media (max-width: 760px) {
   .month-nav { order: 3; flex-basis: 100%; margin-right: 0; }
   .push { margin-left: auto; }
+  .row2 { grid-template-columns: minmax(0, 1fr); }
+  .bl-totals { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .bl-box { min-width: 0; padding: 8px; }
+  .bl-box b { font-size: clamp(14px, 4.5vw, 18px); overflow-wrap: anywhere; }
+}
+
+@media (max-width: 380px) {
+  .finance-annual-grid { grid-template-columns: 1fr; }
+  .bl-totals { grid-template-columns: 1fr; }
 }

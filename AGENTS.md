@@ -22,6 +22,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 | `supabase/phase2h.sql` | Define o valor anual das mensalidades; executar após `phase2g.sql`. |
 | `supabase/phase2i.sql` … `phase2j.sql` | Ajustes de contabilização de diárias; `phase2k.sql` depende de `phase2j.sql`. |
 | `supabase/phase2k.sql` | Cria bucket privado e vínculos de comprovantes para mensalidades e diárias; executar após `phase2j.sql`. |
+| `supabase/phase2l.sql` | Libera leitura do Financeiro a usuários autorizados e mantém edição/comprovantes restritos a admins; executar após `phase2k.sql`. |
 | `supabase/schema.sql` | Fase 1: tabelas, funções de permissão, policies, seed. |
 | `supabase/phase2a.sql` … `phase2e.sql` | Migrações incrementais, **rodadas manualmente no SQL Editor, em ordem**. Idempotentes. |
 | `quarto-bortolli.csv` | Inventário do Quarto Bortolli (34 itens, já importado). |
@@ -37,7 +38,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - `reservation_guests` (reservation_id, name, user_email, type `socio|convidado`, exempt).
 - `guest_charges` (guest_id pk, rate, paid, paid_at): valor/noite **congelado na criação** pelo trigger `set_guest_charge` (recalcula se o tipo mudar). Legível só por dono da reserva e admins; só admin altera `paid`.
 - `audit_log` (at, actor, tbl, op, row_id, label, old_data, new_data): preenchido por triggers de auditoria nas tabelas operacionais e financeiras. Leitura só admin.
-- Financeiro (`phase2g.sql` e `phase2h.sql`): `finance_categories` (categorias de receitas/despesas), `finance_membership_rates` (valor padrão da mensalidade por ano), `finance_memberships` (previsto/recebido por família e mês), `finance_transactions` (lançamentos avulsos) e `finance_daily_adjustments` (ajuste do total importado por família/mês). Todas as tabelas são exclusivas de admins via RLS; `get_finance_daily(ano)` calcula diárias mensais a partir das reservas confirmadas. O valor anual é usado como previsto para todas as famílias e meses; 2026 inicia em R$ 300.
+- Financeiro (`phase2g.sql`–`phase2l.sql`): `finance_categories` (categorias de receitas/despesas), `finance_membership_rates` (valor padrão da mensalidade por ano), `finance_memberships` (previsto/recebido por família e mês), `finance_transactions` (lançamentos avulsos) e `finance_daily_adjustments` (ajuste do total importado por família/mês). Após `phase2l.sql`, usuários autorizados podem ler os dados financeiros; somente admins podem alterar, e comprovantes continuam exclusivos de admins. `get_finance_daily(ano)` calcula diárias mensais a partir das reservas confirmadas. O valor anual é usado como previsto para todas as famílias e meses; 2026 inicia em R$ 300.
 - Comprovantes (`phase2k.sql`): bucket privado `payment-proofs` (PDF/JPG/PNG, até 10 MB), acessível somente a admins. `payment_receipts` guarda metadados; `payment_receipt_memberships` permite vários comprovantes por mensalidade; `payment_receipt_guest_charges` permite um comprovante para várias cobranças de diárias. Novas baixas são bloqueadas no banco sem comprovante associado. O backup JSON inclui metadados e vínculos, não os arquivos do Storage.
 
 ## Funções SQL (security definer)
@@ -52,7 +53,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - **Quartos pessoais:** qualquer cadastrado **solicita** (`pending`, não bloqueia datas). O responsável da família dona ou um admin aprova/recusa. Responsável ou admin reservando já entra `confirmed`. Se há conflito com reserva confirmada, **só admin** decide: substituir (a existente vira `rejected`) ou recusar. Editar reserva em quarto pessoal por quem não é responsável/admin volta a `pending`.
 - **Dono da reserva ou admin** edita/cancela.
 - **Sem e-mails/notificações:** o status é visto dentro do sistema (seção "Solicitações de quartos pessoais" e contador na Agenda).
-- Admins: gerenciam Pessoas (não podem remover nem rebaixar a si mesmos), Valores, Cobrança, Financeiro, Histórico e Backup.
+- Admins: gerenciam Pessoas (não podem remover nem rebaixar a si mesmos), Valores, Cobrança, Financeiro, Histórico e Backup. Todos os usuários autorizados podem consultar o Financeiro; apenas admins podem editar e acessar comprovantes.
 
 ## Mapa do `app.js`
 - Globais (`let`): `me`, `spaces`, `families`, `people`, `rates`, `current`, `monthRes`, `pendingRes`, `agRoom`, `agMonth`, `blRows` etc.
@@ -70,6 +71,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - Execute `phase2g.sql` após `phase2f.sql` antes de usar/publicar o módulo Financeiro.
 - Execute `phase2h.sql` após `phase2g.sql` antes de usar/publicar o padrão anual de mensalidades.
 - Execute `phase2k.sql` após `phase2j.sql` antes de publicar o envio de comprovantes e a baixa obrigatória com comprovante.
+- Execute `phase2l.sql` após `phase2k.sql` antes de publicar a visualização financeira para todos os usuários autorizados.
 - Datas como `YYYY-MM-DD`; usar `parseDate`/`fmtDate` (evitam bug de fuso). Valores em BRL via `money()`.
 - Texto vindo do banco entra com `textContent` (nunca `innerHTML`).
 - Mudou o banco? Criar novo `supabase/phaseX.sql` idempotente e avisar o usuário para rodá-lo; **não publicar JS que dependa de SQL ainda não executado sem avisar**.
@@ -78,7 +80,7 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - Commits terminam com `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ## Estado atual
-Os módulos existentes estão publicados. O Financeiro e os comprovantes dependem das migrações `phase2g.sql`–`phase2k.sql` aplicadas manualmente no Supabase antes da publicação/uso. A versão com comprovantes não deve ser publicada antes da execução da `phase2k.sql`. O fluxo de aprovação e os módulos de cobrança, backup e histórico foram verificados só visualmente com dados simulados, **sem teste com outras contas reais**.
+Os módulos existentes estão publicados. O Financeiro e os comprovantes dependem das migrações `phase2g.sql`–`phase2k.sql` aplicadas manualmente no Supabase antes da publicação/uso. A visualização financeira para todos os usuários autorizados depende também da `phase2l.sql`. A versão com comprovantes não deve ser publicada antes da execução da `phase2k.sql`; a nova experiência financeira não deve ser publicada antes da `phase2l.sql`. O fluxo de aprovação e os módulos de cobrança, backup e histórico foram verificados só visualmente com dados simulados, **sem teste com outras contas reais**.
 
 ## Pendências / ideias
 - Cadastrar responsáveis das outras famílias e demais admins (usuário ainda não tem os e-mails).
