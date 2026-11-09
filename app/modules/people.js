@@ -1,8 +1,8 @@
 // modules/people.js - Gerenciamento de pessoas autorizadas
 import { state, setState } from "../app-state.js";
-import { show, say, setView, setActive } from "./ui.js";
+import { say, setView, setActive } from "./ui.js";
 import { $ } from "./dom.js";
-import { personName, roomById } from "./utils.js";
+import { roomById } from "./utils.js";
 import { getDb } from "./db.js";
 
 export async function showPeople() {
@@ -35,7 +35,7 @@ export function personRow(p) {
   const save = async (patch) => {
     const { error } = await db.from("allowed_users").update(patch).eq("email", p.email);
     say("people-msg", error ? error.message : "Salvo.");
-    if (error) loadPeople();
+    if (error) void loadPeople();
   };
   const name = document.createElement("input");
   name.value = p.name ?? "";
@@ -56,7 +56,7 @@ export function personRow(p) {
   del.onclick = async () => {
     if (!confirm(`Remover o acesso de ${p.name || p.email}?`)) return;
     const { error } = await db.from("allowed_users").delete().eq("email", p.email);
-    if (error) say("people-msg", error.message); else loadPeople();
+    if (error) say("people-msg", error.message); else await loadPeople();
   };
   const phone = document.createElement("input");
   phone.type = "tel"; phone.value = p.phone ?? "";
@@ -88,7 +88,7 @@ export const setupPeopleListeners = () => {
     });
     if (error) return say("people-msg", error.code === "23505" ? "Esse e-mail já está cadastrado." : error.message);
     e.target.reset();
-    loadPeople();
+    await loadPeople();
   };
 };
 

@@ -530,3 +530,88 @@ export function renderFinanceCategories() {
     container.append(section);
   }
 }
+
+export function setupFinanceListeners() {
+  const db = getDb();
+
+  $("fn-load").onclick = async () => {
+    const year = Number($("fn-year").value);
+    if (!Number.isInteger(year) || year < 1900 || year > 9998) {
+      return say("fn-msg", "Informe um ano entre 1900 e 9998.");
+    }
+    setState("fnYear", year);
+    await loadFinance();
+  };
+
+  $("fn-dashboard-load").onclick = async () => {
+    const year = Number($("fn-dashboard-year").value);
+    if (!Number.isInteger(year) || year < 1900 || year > 9998) {
+      return say("fn-dashboard-msg", "Informe um ano entre 1900 e 9998.");
+    }
+    setState("fnYear", year);
+    await loadFinance();
+  };
+
+  $("fn-prev").onclick = async () => {
+    if (state.fnYear === 1900 && state.fnMonth === 0) return;
+    if (state.fnMonth === 0) {
+      setState("fnMonth", 11);
+      setState("fnYear", state.fnYear - 1);
+    } else {
+      setState("fnMonth", state.fnMonth - 1);
+    }
+    await loadFinance();
+  };
+
+  $("fn-next").onclick = async () => {
+    if (state.fnYear === 9998 && state.fnMonth === 11) return;
+    if (state.fnMonth === 11) {
+      setState("fnMonth", 0);
+      setState("fnYear", state.fnYear + 1);
+    } else {
+      setState("fnMonth", state.fnMonth + 1);
+    }
+    await loadFinance();
+  };
+
+  $("fn-kind").onchange = updateFinanceCategoryOptions;
+
+  $("fn-transaction-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const payload = {
+      kind: $("fn-kind").value,
+      category_id: Number($("fn-category").value),
+      transaction_date: $("fn-date").value,
+      description: $("fn-description").value.trim(),
+      amount: Number($("fn-amount").value),
+    };
+    const query = state.fnEditingTransaction
+      ? db.from("finance_transactions").update(payload).eq("id", state.fnEditingTransaction)
+      : db.from("finance_transactions").insert(payload);
+    const { error } = await query;
+    if (error) return say("fn-msg", error.message);
+    setState("fnEditingTransaction", null);
+    $("fn-transaction-form").reset();
+    $("fn-transaction-save").textContent = "Adicionar";
+    show("fn-transaction-cancel", false);
+    await loadFinance();
+  };
+
+  $("fn-transaction-cancel").onclick = () => {
+    setState("fnEditingTransaction", null);
+    $("fn-transaction-form").reset();
+    $("fn-transaction-save").textContent = "Adicionar";
+    show("fn-transaction-cancel", false);
+  };
+
+  $("fn-category-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const { error } = await db.from("finance_categories").insert({
+      kind: $("fn-category-kind").value,
+      name: $("fn-category-name").value.trim(),
+    });
+    if (error) return say("fn-msg", error.message);
+    $("fn-category-form").reset();
+    await loadFinance();
+  };
+}

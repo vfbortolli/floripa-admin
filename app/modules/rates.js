@@ -49,4 +49,24 @@ export const setupRatesListeners = () => {
     state.rates = { socio, convidado };
     say("rates-msg", "Valores salvos.");
   };
+
+  $("fn-membership-rate-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const year = Number($("r-year").value);
+    if (!Number.isInteger(year) || year < 1900 || year > 9998) {
+      return say("rates-msg", "Informe um ano entre 1900 e 9998.");
+    }
+    const amount = Number($("fn-membership-rate").value);
+    if (!Number.isFinite(amount) || amount < 0) {
+      say("rates-msg", "Informe uma mensalidade válida (zero ou maior).");
+      return;
+    }
+    const { error } = await db.from("finance_membership_rates").upsert(
+      { year, amount }, { onConflict: "year" },
+    );
+    if (error) return say("rates-msg", error.message);
+    state.fnYear = year;
+    await displayRates(year);
+    say("rates-msg", `Mensalidade padrão de ${year} salva.`);
+  };
 };

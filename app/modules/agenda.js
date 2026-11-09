@@ -515,4 +515,21 @@ export function setupAgendaListeners() {
       $("r-save").disabled = false;
     }
   };
+
+  // Listeners dos botões de navegação da agenda
+  $("ag-prev").onclick = () => {
+    setState("agMonth", new Date(state.agMonth.getFullYear(), state.agMonth.getMonth() - 1, 1));
+    void loadMonth();
+    renderGantt();
+    renderResList();
+  };
+
+  $("ag-next").onclick = () => {
+    setState("agMonth", new Date(state.agMonth.getFullYear(), state.agMonth.getMonth() + 1, 1));
+    void loadMonth();
+    renderGantt();
+    renderResList();
+  };
+
+  $("ag-new").onclick = () => openReservation(null, { space_id: state.agRoom });
 }

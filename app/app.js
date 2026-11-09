@@ -4,14 +4,14 @@ import { $ } from "./modules/dom.js";
 import { show, say, setView, setActive } from "./modules/ui.js";
 import { createDbClient } from "./modules/db.js";
 import { showLogin, canEdit, logout } from "./modules/auth.js";
-import { selectSpace, loadItems } from "./modules/inventory.js";
-import { showPeople } from "./modules/people.js";
-import { showRates } from "./modules/rates.js";
-import { showHistory } from "./modules/history.js";
-import { showAgenda, renderRoomChips } from "./modules/agenda.js";
-import { showBilling } from "./modules/billing.js";
+import { selectSpace, loadItems, setupInventoryListeners } from "./modules/inventory.js";
+import { showPeople, setupPeopleListeners } from "./modules/people.js";
+import { showRates, setupRatesListeners } from "./modules/rates.js";
+import { showHistory, setupHistoryListeners } from "./modules/history.js";
+import { showAgenda, renderRoomChips, setupAgendaListeners } from "./modules/agenda.js";
+import { showBilling, setupBillingListeners } from "./modules/billing.js";
 import { 
-  showFinance, showFinanceDashboard, loadFinance, updateFinanceCategoryOptions 
+  showFinance, showFinanceDashboard, loadFinance, updateFinanceCategoryOptions, setupFinanceListeners
 } from "./modules/finance.js";
 import { renderNav } from "./modules/nav.js";
 import { reservableRooms } from "./modules/utils.js";
@@ -62,6 +62,15 @@ async function init() {
 
   renderNav();
   showAgenda();
+  
+  // Setup event listeners para todos os módulos
+  setupInventoryListeners(db);
+  setupPeopleListeners();
+  setupRatesListeners();
+  setupHistoryListeners();
+  setupAgendaListeners();
+  setupBillingListeners();
+  setupFinanceListeners();
 }
 
 // Event listeners do formulário de backup
@@ -76,121 +85,6 @@ $("btn-backup").onclick = async () => {
   a.click();
   URL.revokeObjectURL(a.href);
   say("backup-msg", "Backup baixado.");
-};
-
-// Event listeners de Financeiro
-$("fn-load").onclick = async () => {
-  const year = Number($("fn-year").value);
-  if (!Number.isInteger(year) || year < 1900 || year > 9998) return say("fn-msg", "Informe um ano entre 1900 e 9998.");
-  setState("fnYear", year);
-  await loadFinance();
-};
-
-$("fn-dashboard-load").onclick = async () => {
-  const year = Number($("fn-dashboard-year").value);
-  if (!Number.isInteger(year) || year < 1900 || year > 9998) {
-    return say("fn-dashboard-msg", "Informe um ano entre 1900 e 9998.");
-  }
-  setState("fnYear", year);
-  await loadFinance();
-};
-
-$("fn-prev").onclick = async () => {
-  if (state.fnYear === 1900 && state.fnMonth === 0) return;
-  if (state.fnMonth === 0) { setState("fnMonth", 11); setState("fnYear", state.fnYear - 1); } 
-  else setState("fnMonth", state.fnMonth - 1);
-  await loadFinance();
-};
-
-$("fn-next").onclick = async () => {
-  if (state.fnYear === 9998 && state.fnMonth === 11) return;
-  if (state.fnMonth === 11) { setState("fnMonth", 0); setState("fnYear", state.fnYear + 1); } 
-  else setState("fnMonth", state.fnMonth + 1);
-  await loadFinance();
-};
-
-$("fn-kind").onchange = updateFinanceCategoryOptions;
-
-$("fn-transaction-form").onsubmit = async (event) => {
-  event.preventDefault();
-  const payload = {
-    kind: $("fn-kind").value, category_id: Number($("fn-category").value),
-    transaction_date: $("fn-date").value, description: $("fn-description").value.trim(),
-    amount: Number($("fn-amount").value),
-  };
-  const query = state.fnEditingTransaction
-    ? db.from("finance_transactions").update(payload).eq("id", state.fnEditingTransaction)
-    : db.from("finance_transactions").insert(payload);
-  const { error } = await query;
-  if (error) return say("fn-msg", error.message);
-  setState("fnEditingTransaction", null);
-  $("fn-transaction-form").reset();
-  $("fn-transaction-save").textContent = "Adicionar"; 
-  show("fn-transaction-cancel", false);
-  const { fnPeriod } = await import("./modules/finance.js");
-  // Note: fnPeriod is not exported, will need to handle this differently
-  await loadFinance();
-};
-
-$("fn-transaction-cancel").onclick = () => {
-  setState("fnEditingTransaction", null);
-  $("fn-transaction-form").reset();
-  $("fn-transaction-save").textContent = "Adicionar"; 
-  show("fn-transaction-cancel", false);
-};
-
-$("fn-category-form").onsubmit = async (event) => {
-  event.preventDefault();
-  const { error } = await db.from("finance_categories").insert({
-    kind: $("fn-category-kind").value, name: $("fn-category-name").value.trim(),
-  });
-  if (error) return say("fn-msg", error.message);
-  $("fn-category-form").reset();
-  await loadFinance();
-};
-
-// Event listeners de Valores
-$("r-load").onclick = async () => {
-  const year = Number($("r-year").value);
-  if (!Number.isInteger(year) || year < 1900 || year > 9998) {
-    return say("rates-msg", "Informe um ano entre 1900 e 9998.");
-  }
-  setState("fnYear", year);
-  const { displayRates } = await import("./modules/rates.js");
-  await displayRates(year);
-};
-
-$("form-rates").onsubmit = async (e) => {
-  e.preventDefault();
-  const socio = Number($("r-socio").value);
-  const convidado = Number($("r-convidado").value);
-  const { error } = await db.from("settings").upsert([
-    { key: "rate_socio", value: socio },
-    { key: "rate_convidado", value: convidado },
-  ]);
-  if (error) return say("rates-msg", error.message);
-  setState("rates", { socio, convidado });
-  say("rates-msg", "Valores salvos.");
-};
-
-$("fn-membership-rate-form").onsubmit = async (event) => {
-  event.preventDefault();
-  const year = Number($("r-year").value);
-  if (!Number.isInteger(year) || year < 1900 || year > 9998) {
-    return say("rates-msg", "Informe um ano entre 1900 e 9998.");
-  }
-  const amount = Number($("fn-membership-rate").value);
-  if (!Number.isFinite(amount) || amount < 0) {
-    say("rates-msg", "Informe uma mensalidade válida (zero ou maior).");
-    return;
-  }
-  const { error } = await db.from("finance_membership_rates").upsert(
-    { year, amount }, { onConflict: "year" },
-  );
-  if (error) return say("rates-msg", error.message);
-  setState("fnYear", year);
-  await loadFinance();
-  say("rates-msg", `Mensalidade padrão de ${year} salva.`);
 };
 
 // Event listeners de login e logout
