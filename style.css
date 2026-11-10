@@ -46,6 +46,7 @@ input:focus, select:focus, button:focus-visible {
 .card h1 { margin: 0 0 4px; font-size: 24px; }
 .brand-icon { width: 1.35em; height: 1.35em; object-fit: contain; vertical-align: -0.22em; margin-right: .18em; }
 .card .brand-icon { width: 1.6em; height: 1.6em; vertical-align: -0.3em; }
+#login .brand-icon { display: block; margin: 0 auto; }
 .card p { color: var(--muted); margin: 0 0 20px; }
 .card input { width: 100%; margin-bottom: 10px; }
 .card button { width: 100%; }
