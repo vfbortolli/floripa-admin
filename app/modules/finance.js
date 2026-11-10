@@ -128,10 +128,15 @@ export function fnFinanceSummary(data) {
   };
 }
 
-export function fnFinanceYearSummary() {
+export function fnFinanceYearSummary(currentDate = new Date()) {
   const incomeRows = new Map();
   const expenseRows = new Map();
-  for (let month = 0; month < 12; month += 1) {
+  const lastClosedMonth = state.fnYear < currentDate.getFullYear()
+    ? 11
+    : state.fnYear === currentDate.getFullYear()
+      ? currentDate.getMonth() - 1
+      : -1;
+  for (let month = 0; month <= lastClosedMonth; month += 1) {
     const summary = fnFinanceSummary(fnMonthlyData(month));
     for (const row of summary.incomeRows) {
       incomeRows.set(row.label, (incomeRows.get(row.label) ?? 0) + row.amount);
@@ -148,6 +153,7 @@ export function fnFinanceYearSummary() {
     balance: income - expenses,
     incomeRows: [...incomeRows].map(([label, amount]) => ({ label, amount })),
     expenseRows: [...expenseRows].map(([label, amount]) => ({ label, amount })),
+    lastClosedMonth,
   };
 }
 
@@ -200,8 +206,15 @@ export function renderFinanceDashboard() {
 }
 
 export function renderFinanceDashboardYear() {
-  const summary = fnFinanceYearSummary();
-  $("fn-dashboard-annual-label").textContent = String(state.fnYear);
+  const currentDate = new Date();
+  const summary = fnFinanceYearSummary(currentDate);
+  const periodLabel = summary.lastClosedMonth < 0
+    ? `${state.fnYear} (sem meses fechados)`
+    : state.fnYear === currentDate.getFullYear()
+      ? `${state.fnYear} (até ${new Date(state.fnYear, summary.lastClosedMonth, 1)
+        .toLocaleDateString("pt-BR", { month: "long" })})`
+      : String(state.fnYear);
+  $("fn-dashboard-annual-label").textContent = periodLabel;
   $("fn-dashboard-annual-balance").textContent = money(summary.balance);
   $("fn-dashboard-annual-income-total").textContent = money(summary.income);
   $("fn-dashboard-annual-expense-total").textContent = money(summary.expenses);
