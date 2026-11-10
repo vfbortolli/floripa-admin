@@ -215,6 +215,8 @@ button.person-toggle:focus-visible { outline-offset: -2px; }
 /* Financeiro */
 .finance-year { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .finance-year input { width: 110px; }
+.finance-dashboard-views { display: flex; gap: 8px; margin-top: 16px; }
+.finance-dashboard-views button[aria-pressed="true"] { color: #fff; background: var(--primary); border-color: var(--primary); }
 .finance-table-wrap { width: 100%; overflow-x: auto; }
 .finance-table { min-width: 720px; }
 .finance-annual { margin-top: 20px; }

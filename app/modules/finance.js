@@ -128,6 +128,29 @@ export function fnFinanceSummary(data) {
   };
 }
 
+export function fnFinanceYearSummary() {
+  const incomeRows = new Map();
+  const expenseRows = new Map();
+  for (let month = 0; month < 12; month += 1) {
+    const summary = fnFinanceSummary(fnMonthlyData(month));
+    for (const row of summary.incomeRows) {
+      incomeRows.set(row.label, (incomeRows.get(row.label) ?? 0) + row.amount);
+    }
+    for (const row of summary.expenseRows) {
+      expenseRows.set(row.label, (expenseRows.get(row.label) ?? 0) + row.amount);
+    }
+  }
+  const income = [...incomeRows.values()].reduce((sum, amount) => sum + amount, 0);
+  const expenses = [...expenseRows.values()].reduce((sum, amount) => sum + amount, 0);
+  return {
+    income,
+    expenses,
+    balance: income - expenses,
+    incomeRows: [...incomeRows].map(([label, amount]) => ({ label, amount })),
+    expenseRows: [...expenseRows].map(([label, amount]) => ({ label, amount })),
+  };
+}
+
 export function renderFinanceDashboard() {
   const grid = $("fn-annual-grid");
   grid.innerHTML = "";
@@ -173,6 +196,17 @@ export function renderFinanceDashboard() {
     grid.append(card);
   });
   renderFinanceDashboardDetails();
+  renderFinanceDashboardYear();
+}
+
+export function renderFinanceDashboardYear() {
+  const summary = fnFinanceYearSummary();
+  $("fn-dashboard-annual-label").textContent = String(state.fnYear);
+  $("fn-dashboard-annual-balance").textContent = money(summary.balance);
+  $("fn-dashboard-annual-income-total").textContent = money(summary.income);
+  $("fn-dashboard-annual-expense-total").textContent = money(summary.expenses);
+  renderFinanceBreakdownRows($("fn-dashboard-annual-income"), summary.incomeRows);
+  renderFinanceBreakdownRows($("fn-dashboard-annual-expenses"), summary.expenseRows);
 }
 
 export function renderFinanceDashboardDetails() {
@@ -184,24 +218,25 @@ export function renderFinanceDashboardDetails() {
   $("fn-dashboard-income-total").textContent = money(summary.income);
   $("fn-dashboard-expense-total").textContent = money(summary.expenses);
 
-  const renderRows = (target, rows) => {
-    target.innerHTML = "";
-    for (const row of rows) {
-      if (row.amount <= 0) continue;
-      const div = document.createElement("div");
-      div.className = "finance-breakdown-row";
-      const label = document.createElement("span");
-      label.className = "finance-breakdown-label";
-      label.textContent = row.label;
-      const value = document.createElement("span");
-      value.className = "finance-breakdown-value";
-      value.textContent = money(row.amount);
-      div.append(label, value);
-      target.append(div);
-    }
-  };
-  renderRows($("fn-dashboard-income"), summary.incomeRows);
-  renderRows($("fn-dashboard-expenses"), summary.expenseRows);
+  renderFinanceBreakdownRows($("fn-dashboard-income"), summary.incomeRows);
+  renderFinanceBreakdownRows($("fn-dashboard-expenses"), summary.expenseRows);
+}
+
+function renderFinanceBreakdownRows(target, rows) {
+  target.innerHTML = "";
+  for (const row of rows) {
+    if (row.amount <= 0) continue;
+    const div = document.createElement("div");
+    div.className = "finance-breakdown-row";
+    const label = document.createElement("span");
+    label.className = "finance-breakdown-label";
+    label.textContent = row.label;
+    const value = document.createElement("span");
+    value.className = "finance-breakdown-value";
+    value.textContent = money(row.amount);
+    div.append(label, value);
+    target.append(div);
+  }
 }
 
 export function renderFinanceDetails() {
@@ -608,6 +643,20 @@ export function renderFinanceCategories() {
 
 export function setupFinanceListeners() {
   const db = getDb();
+
+  $("fn-view-month").onclick = () => {
+    show("fn-month-view", true);
+    show("fn-year-view", false);
+    $("fn-view-month").setAttribute("aria-pressed", "true");
+    $("fn-view-year").setAttribute("aria-pressed", "false");
+  };
+
+  $("fn-view-year").onclick = () => {
+    show("fn-month-view", false);
+    show("fn-year-view", true);
+    $("fn-view-month").setAttribute("aria-pressed", "false");
+    $("fn-view-year").setAttribute("aria-pressed", "true");
+  };
 
   $("fn-load").onclick = async () => {
     const year = Number($("fn-year").value);

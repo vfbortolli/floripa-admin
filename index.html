@@ -141,34 +141,65 @@
           <label class="finance-year">Ano <input id="fn-dashboard-year" type="number" min="1900" max="9998" step="1"></label>
           <button id="fn-dashboard-load" class="secondary">Consultar</button>
         </div>
-        <p class="msg">Visão geral das receitas, despesas e do balanço da casa. Todos os usuários autorizados podem consultar; somente administradores podem alterar dados financeiros. Selecione um mês para ver os detalhes.</p>
-        <section class="finance-annual" aria-label="Resumo financeiro do ano">
-          <h3 class="sub">Meses de <span id="fn-dashboard-year-label"></span></h3>
-          <div id="fn-annual-grid" class="finance-annual-grid"></div>
-        </section>
+        <p class="msg">Visão geral das receitas, despesas e do balanço da casa. Todos os usuários autorizados podem consultar; somente administradores podem alterar dados financeiros.</p>
         <p id="fn-dashboard-msg" class="msg"></p>
-        <section id="fn-dashboard-detail" class="finance-dashboard-detail" aria-live="polite">
+        <div class="finance-dashboard-views" role="group" aria-label="Período do painel financeiro">
+          <button id="fn-view-month" class="secondary" type="button" aria-pressed="true">Mês</button>
+          <button id="fn-view-year" class="secondary" type="button" aria-pressed="false">Ano</button>
+        </div>
+        <div id="fn-month-view">
+          <section class="finance-annual" aria-label="Resumo financeiro por mês">
+            <h3 class="sub">Meses de <span id="fn-dashboard-year-label"></span></h3>
+            <div id="fn-annual-grid" class="finance-annual-grid"></div>
+          </section>
+          <section id="fn-dashboard-detail" class="finance-dashboard-detail" aria-live="polite">
+            <div class="finance-dashboard-detail-heading">
+              <h3 class="sub">Detalhes de <span id="fn-dashboard-month-label"></span></h3>
+              <div class="finance-dashboard-balance">
+                <span>Balanço do mês</span>
+                <strong id="fn-dashboard-balance"></strong>
+              </div>
+            </div>
+            <div class="finance-breakdown-grid">
+              <section class="finance-breakdown income">
+                <div class="finance-breakdown-heading">
+                  <h4>Receitas</h4>
+                  <strong id="fn-dashboard-income-total"></strong>
+                </div>
+                <div id="fn-dashboard-income"></div>
+              </section>
+              <section class="finance-breakdown expense">
+                <div class="finance-breakdown-heading">
+                  <h4>Despesas</h4>
+                  <strong id="fn-dashboard-expense-total"></strong>
+                </div>
+                <div id="fn-dashboard-expenses"></div>
+              </section>
+            </div>
+          </section>
+        </div>
+        <section id="fn-year-view" class="finance-dashboard-detail hidden" aria-live="polite">
           <div class="finance-dashboard-detail-heading">
-            <h3 class="sub">Detalhes de <span id="fn-dashboard-month-label"></span></h3>
+            <h3 class="sub">Resumo de <span id="fn-dashboard-annual-label"></span></h3>
             <div class="finance-dashboard-balance">
-              <span>Balanço do mês</span>
-              <strong id="fn-dashboard-balance"></strong>
+              <span>Balanço do ano</span>
+              <strong id="fn-dashboard-annual-balance"></strong>
             </div>
           </div>
           <div class="finance-breakdown-grid">
             <section class="finance-breakdown income">
               <div class="finance-breakdown-heading">
                 <h4>Receitas</h4>
-                <strong id="fn-dashboard-income-total"></strong>
+                <strong id="fn-dashboard-annual-income-total"></strong>
               </div>
-              <div id="fn-dashboard-income"></div>
+              <div id="fn-dashboard-annual-income"></div>
             </section>
             <section class="finance-breakdown expense">
               <div class="finance-breakdown-heading">
                 <h4>Despesas</h4>
-                <strong id="fn-dashboard-expense-total"></strong>
+                <strong id="fn-dashboard-annual-expense-total"></strong>
               </div>
-              <div id="fn-dashboard-expenses"></div>
+              <div id="fn-dashboard-annual-expenses"></div>
             </section>
           </div>
         </section>
