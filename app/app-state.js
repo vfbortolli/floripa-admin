@@ -14,6 +14,8 @@ export const state = {
   monthRes: [],
   pendingRes: [],
   agRoom: null,
+  reservationSearch: [],
+  reservationSearchLoaded: false,
   
   // Cobrança
   blMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),

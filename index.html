@@ -74,11 +74,31 @@
             <button id="ag-next" class="secondary" aria-label="Próximo mês">›</button>
           </span>
           <button id="ag-new" class="push">Nova reserva</button>
+          <button id="ag-search" class="secondary">Consultar reserva</button>
         </div>
         <div id="ag-rooms" class="chips"></div>
         <div id="gantt" class="gantt"></div>
         <h3 class="sub">Reservas do mês</h3>
         <div id="res-list"></div>
+        <section id="reservation-search" class="reservation-search">
+          <h3 class="sub">Consultar reservas</h3>
+          <form id="reservation-search-form" class="reservation-search-filters">
+            <label>Período a partir de
+              <input id="reservation-search-from" type="date">
+            </label>
+            <label>Período até
+              <input id="reservation-search-to" type="date">
+            </label>
+            <label>Quarto
+              <select id="reservation-search-room">
+                <option value="">Todos os quartos</option>
+              </select>
+            </label>
+            <button type="submit" class="secondary">Consultar</button>
+          </form>
+          <p id="reservation-search-msg" class="msg" role="status" aria-live="polite"></p>
+          <div id="reservation-search-list"></div>
+        </section>
         <div id="pending-wrap" class="hidden">
           <h3 class="sub">Solicitações de quartos pessoais</h3>
           <div id="pending-list"></div>

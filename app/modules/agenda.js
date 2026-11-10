@@ -119,6 +119,108 @@ export async function loadMonth() {
   renderResList();
 }
 
+export async function loadReservationSearch() {
+  const fromDate = $("reservation-search-from").value;
+  const toDate = $("reservation-search-to").value;
+  const roomId = $("reservation-search-room").value;
+  if (fromDate && toDate && fromDate > toDate) {
+    return say("reservation-search-msg", "A data inicial deve ser anterior ou igual à data final.");
+  }
+
+  const db = getDb();
+  const submitButton = $("reservation-search-form").querySelector('button[type="submit"]');
+  const pageSize = 500;
+  const reservations = [];
+  $("reservation-search-list").replaceChildren();
+  setState("reservationSearch", []);
+  setState("reservationSearchLoaded", false);
+  say("reservation-search-msg", "Consultando reservas…");
+  submitButton.disabled = true;
+
+  try {
+    for (let offset = 0; ; offset += pageSize) {
+      let query = db.from("reservations")
+        .select("id, space_id, check_in, check_out, kind, status, note, created_by_name, reservation_guests(id, reservation_id, name, type, exempt, guest_charges(rate))")
+        .order("check_in")
+        .order("id")
+        .range(offset, offset + pageSize - 1);
+      if (fromDate) query = query.gt("check_out", fromDate);
+      if (toDate) query = query.lte("check_in", toDate);
+      if (roomId) query = query.eq("space_id", Number(roomId));
+
+      const { data, error } = await query;
+      if (error) {
+        say("reservation-search-msg", error.message);
+        return;
+      }
+      reservations.push(...(data ?? []));
+      if (!data || data.length < pageSize) break;
+    }
+
+    setState("reservationSearch", reservations);
+    setState("reservationSearchLoaded", true);
+    renderReservationSearch();
+    say("reservation-search-msg", "");
+  } catch (error) {
+    say("reservation-search-msg", error instanceof Error ? error.message : String(error));
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+export function renderReservationSearch() {
+  const box = $("reservation-search-list");
+  box.replaceChildren();
+  if (!state.reservationSearchLoaded) return;
+
+  const list = state.reservationSearch;
+  const summary = document.createElement("p");
+  summary.className = "reservation-search-summary";
+  summary.textContent = `${list.length} ${list.length === 1 ? "reserva encontrada" : "reservas encontradas"}.`;
+  box.append(summary);
+
+  if (!list.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Nenhuma reserva encontrada com esses filtros.";
+    box.append(empty);
+    return;
+  }
+
+  const statusLabels = {
+    confirmed: ["Confirmada", "confirmed"],
+    pending: ["Pendente", "reparo"],
+    rejected: ["Recusada", "inutilizavel"],
+  };
+  for (const reservation of list) {
+    const room = roomById(reservation.space_id);
+    const card = document.createElement("div");
+    card.className = "res-card";
+    const head = document.createElement("div");
+    head.className = "res-head";
+    const title = document.createElement("b");
+    const formatDate = (date) => parseDate(date).toLocaleDateString("pt-BR");
+    title.textContent = `${room?.name ?? "Espaço desconhecido"} · ${formatDate(reservation.check_in)} → ${formatDate(reservation.check_out)}`;
+    const [statusText, statusClass] = statusLabels[reservation.status] ?? ["Status desconhecido", "reparo"];
+    const status = document.createElement("span");
+    status.className = `tag ${statusClass}`;
+    status.textContent = statusText;
+    head.append(title, status);
+
+    const occupants = document.createElement("div");
+    occupants.className = "res-body";
+    const guests = reservation.reservation_guests ?? [];
+    occupants.textContent = reservation.kind === "block"
+      ? "Bloqueio por plataforma · sem hóspedes cadastrados"
+      : guests.length
+        ? `Pessoas: ${guests.map((guest) => guest.name).join(", ")}`
+        : "Nenhuma pessoa cadastrada nesta reserva";
+    card.append(head, occupants);
+    card.onclick = () => openReservation(reservation);
+    box.append(card);
+  }
+}
+
 export function barLabel(r) {
   if (r.kind === "block") return "Aluguel";
   const names = r.reservation_guests.map((g) => g.name.split(" ")[0]);
@@ -435,11 +537,22 @@ export async function resolveReservation(approve) {
 
 const loadAll = async () => {
   if (!(await loadMyReservationIds())) return;
-  await Promise.all([loadMonth(), loadPending()]);
+  await Promise.all([
+    loadMonth(),
+    loadPending(),
+    state.reservationSearchLoaded ? loadReservationSearch() : Promise.resolve(),
+  ]);
 };
 
 export function setupAgendaListeners() {
   const db = getDb();
+  const roomFilter = $("reservation-search-room");
+  for (const room of reservableRooms()) roomFilter.append(new Option(room.name, room.id));
+  $("reservation-search-form").onsubmit = (event) => {
+    event.preventDefault();
+    void loadReservationSearch();
+  };
+  $("ag-search").onclick = () => $("reservation-search").scrollIntoView({ behavior: "smooth", block: "start" });
   $("g-add").onclick = addGuest;
   $("g-name").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addGuest(); } };
   $("g-name").onchange = () => {
