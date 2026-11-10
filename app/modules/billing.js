@@ -1,13 +1,18 @@
 import { state, setState } from "../app-state.js";
-import { show, say, setView, setActive } from "./ui.js";
+import { show, say, setView, setActive, canManageFinance } from "./ui.js";
 import { money, fmtDate, brDate, nightsBetween, roomById, whatsappUrl, TYPES } from "./utils.js";
 import { $ } from "./dom.js";
 import { getDb, uploadPaymentProof, cleanupUnlinkedPaymentProof, openPaymentProof, deletePaymentProof } from "./db.js";
+
+let expandedMembershipKey = null;
+let expandedDailyReservationId = null;
 
 export async function showBilling() {
   setState("current", null);
   setView("billing");
   setActive((b) => b.id === "nav-billing");
+  expandedMembershipKey = null;
+  expandedDailyReservationId = null;
   await loadBilling();
 }
 
@@ -24,14 +29,13 @@ export async function loadBilling() {
       .gte("check_out", monthStart)
       .lt("check_out", monthEnd)
       .order("check_out"),
-    db.from("finance_memberships").select("id, family_id, expected_amount, received_amount")
+    db.from("finance_memberships").select("id, family_id, expected_amount, received_amount, paid_at")
       .eq("period_month", monthStart),
     db.from("finance_membership_rates").select("amount").eq("year", y).maybeSingle(),
   ]);
   const failed = [reservations, memberships, membershipRate].find((result) => result.error);
   if (failed) return say("bl-msg", failed.error.message);
   say("bl-msg", "");
-  setState("blSelected", new Set());
   setState("blRows", []);
   for (const r of reservations.data ?? []) {
     const nights = nightsBetween(r.check_in, r.check_out);
@@ -40,6 +44,7 @@ export async function loadBilling() {
       if (g.exempt || !c) continue;
       state.blRows.push({
         kind: "daily",
+        reservationId: r.id,
         guestId: g.id, who: g.name, type: g.type,
         room: roomById(r.space_id)?.name ?? "?", check_in: r.check_in, check_out: r.check_out,
         nights, rate: Number(c.rate), amount: Number(c.rate) * nights,
@@ -56,11 +61,13 @@ export async function loadBilling() {
     const received = Number(saved?.received_amount ?? 0);
     state.blRows.push({
       kind: "membership",
+      membershipId: saved?.id ?? null,
       familyId: family.id,
       who: family.name,
       period: monthStart,
       amount,
       received,
+      paidAt: saved?.paid_at ?? "",
       paid: amount > 0 && received >= amount,
       receipts: [],
     });
@@ -95,19 +102,44 @@ export async function loadBilling() {
       if (row && receipt) row.receipts.push(receipt);
     }
   }
+  const membershipRows = state.blRows.filter((row) => row.kind === "membership" && row.membershipId);
+  if (canManageFinance() && membershipRows.length) {
+    const { data: receiptLinks, error: receiptError } = await db.from("payment_receipt_memberships")
+      .select("membership_id, payment_receipts(id, object_path, original_name, uploaded_at)")
+      .in("membership_id", membershipRows.map((row) => row.membershipId));
+    if (receiptError) return say("bl-msg", receiptError.message);
+    for (const link of receiptLinks ?? []) {
+      const receipt = Array.isArray(link.payment_receipts) ? link.payment_receipts[0] : link.payment_receipts;
+      const row = membershipRows.find((item) => item.membershipId === link.membership_id);
+      if (row && receipt) row.receipts.push(receipt);
+    }
+  }
   renderBilling();
 }
 
 export function renderBilling() {
-  const db = getDb();
   const sum = (rows) => rows.reduce((t, r) => t + r.amount, 0);
   const paid = state.blRows.reduce((total, row) => total + Math.min(row.amount, row.received), 0);
   const total = sum(state.blRows);
   const statusFilter = $("bl-status-filter").value;
   const typeFilter = $("bl-type-filter").value;
-  const visibleRows = state.blRows.filter((row) =>
-    (statusFilter === "all" || (statusFilter === "paid" ? row.paid : !row.paid))
-    && (typeFilter === "all" || row.kind === typeFilter));
+  const rowsByReservation = new Map();
+  for (const row of state.blRows) {
+    if (row.kind !== "daily") continue;
+    rowsByReservation.set(row.reservationId, [...(rowsByReservation.get(row.reservationId) ?? []), row]);
+  }
+  const dailyGroups = [...rowsByReservation.values()].filter((rows) =>
+    typeFilter !== "membership"
+    && (statusFilter === "all"
+      || (statusFilter === "paid" ? rows.every((row) => row.paid) : rows.some((row) => !row.paid))));
+  const membershipRows = state.blRows.filter((row) =>
+    row.kind === "membership"
+    && typeFilter !== "daily"
+    && (statusFilter === "all" || (statusFilter === "paid" ? row.paid : !row.paid)));
+  const visibleRows = [...dailyGroups.flat(), ...membershipRows];
+  if (expandedDailyReservationId && !dailyGroups.some((rows) => rows[0].reservationId === expandedDailyReservationId)) {
+    expandedDailyReservationId = null;
+  }
   $("bl-totals").innerHTML = "";
   for (const [label, v, cls] of [["Total", total, ""], ["Pago", paid, "ok"], ["A receber", total - paid, total - paid ? "warn" : ""]]) {
     const d = document.createElement("div");
@@ -125,159 +157,96 @@ export function renderBilling() {
     box.innerHTML = `<p class="empty">${state.blRows.length ? "Nenhuma cobrança com esse status neste mês." : "Nenhuma cobrança neste mês."}</p>`;
     return;
   }
-  const dailyRows = visibleRows.filter((row) => row.kind === "daily");
-  let updateSelection = () => {};
-  if (dailyRows.length) {
-    const proofTools = document.createElement("div");
-    proofTools.className = "bl-proof-tools";
-    const instructions = document.createElement("span");
-    instructions.textContent = "Selecione uma ou mais diárias para anexar o comprovante da transferência e dar baixa.";
-    const uploadLabel = document.createElement("label");
-    uploadLabel.className = "btn secondary";
-    uploadLabel.textContent = "Escolher comprovante";
-    const uploadInput = document.createElement("input");
-    uploadInput.type = "file";
-    uploadInput.accept = "application/pdf,image/jpeg,image/png";
-    uploadInput.hidden = true;
-    uploadLabel.append(uploadInput);
-    const applyProof = document.createElement("button");
-    applyProof.type = "button";
-    applyProof.textContent = "Anexar comprovante e dar baixa";
-    applyProof.disabled = true;
-    uploadInput.onchange = () => {
-      applyProof.disabled = !uploadInput.files?.length || !state.blSelected.size;
-    };
-    updateSelection = () => {
-      applyProof.disabled = !uploadInput.files?.length || !state.blSelected.size;
-      const selectedRows = state.blRows.filter((row) => row.kind === "daily" && state.blSelected.has(row.guestId));
-      applyProof.textContent = selectedRows.some((row) => !row.paid)
-        ? "Anexar comprovante e dar baixa"
-        : "Anexar comprovante";
-    };
-    applyProof.onclick = async () => {
-      const file = uploadInput.files?.[0];
-      const selectedRows = state.blRows.filter((row) => row.kind === "daily" && state.blSelected.has(row.guestId));
-      if (!file || !selectedRows.length) return;
-      applyProof.disabled = true;
-      say("bl-msg", "Enviando comprovante…");
-      const { data: receipt, error: uploadError } = await uploadPaymentProof(file);
-      if (uploadError) {
-        say("bl-msg", uploadError);
-        updateSelection();
-        return;
-      }
-      const { error: linkError } = await db.from("payment_receipt_guest_charges").insert(
-        selectedRows.map((row) => ({ receipt_id: receipt.id, guest_id: row.guestId })),
-      );
-      if (linkError) {
-        const cleanupErrors = await cleanupUnlinkedPaymentProof(receipt);
-        say("bl-msg", [linkError.message, ...cleanupErrors].join(" "));
-        updateSelection();
-        return;
-      }
-      const unpaidRows = selectedRows.filter((row) => !row.paid);
-      if (unpaidRows.length) {
-        const { error: paidError } = await db.from("guest_charges").update({
-          paid: true, paid_at: new Date().toISOString(),
-        }).in("guest_id", unpaidRows.map((row) => row.guestId));
-        if (paidError) {
-          await loadBilling();
-          say("bl-msg", `Comprovante anexado, mas não foi possível dar baixa: ${paidError.message}`);
-          return;
-        }
-      }
-      uploadInput.value = "";
-      setState("blSelected", new Set());
-      await loadBilling();
-    };
-    proofTools.append(instructions, uploadLabel, applyProof);
-    box.append(proofTools);
-  }
-  const groups = new Map();
-  for (const r of dailyRows) groups.set(r.room, [...(groups.get(r.room) ?? []), r]);
-  const sortedGroups = [...groups].sort((a, b) => a[0].localeCompare(b[0], "pt-BR", { numeric: true }));
-  for (const [room, rows] of sortedGroups) {
+  const sortedGroups = dailyGroups.sort((a, b) =>
+    a[0].room.localeCompare(b[0].room, "pt-BR", { numeric: true })
+      || a[0].check_in.localeCompare(b[0].check_in));
+  for (const rows of sortedGroups) {
+    const reservation = rows[0];
     const card = document.createElement("div");
     card.className = "res-card bl-card";
     const head = document.createElement("div");
     head.className = "res-head";
+    const heading = document.createElement("div");
+    heading.className = "bl-payment-heading";
     const name = document.createElement("b");
-    name.textContent = room;
+    name.textContent = `${reservation.room} · ${brDate(reservation.check_in)} → ${brDate(reservation.check_out)}`;
     const open = rows.filter((row) => !row.paid).reduce((amount, row) => amount + row.amount - row.received, 0);
     const tag = document.createElement("span");
     tag.className = "tag " + (open ? "reparo" : "bom");
     tag.textContent = open ? `Deve ${money(open)}` : "Quitado";
-    head.append(name, tag);
+    heading.append(name);
+    const expanded = expandedDailyReservationId === reservation.reservationId;
+    if (canManageFinance()) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "secondary bl-payment-toggle";
+      toggle.textContent = expanded
+        ? "Fechar quitação"
+        : open ? "Registrar quitação" : rows.some((row) => !row.receipts.length) ? "Anexar comprovante" : "Ver comprovantes";
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.setAttribute("aria-controls", `bl-daily-details-${reservation.reservationId}`);
+      toggle.onclick = () => {
+        expandedDailyReservationId = expanded ? null : reservation.reservationId;
+        renderBilling();
+      };
+      heading.append(toggle);
+    }
+    head.append(heading, tag);
     card.append(head);
     for (const r of rows) {
       const line = document.createElement("div");
       line.className = "bl-line";
-      const select = document.createElement("input");
-      select.type = "checkbox";
-      select.checked = state.blSelected.has(r.guestId);
-      select.disabled = r.paid && r.receipts.length > 0;
-      select.setAttribute("aria-label", `Selecionar cobrança de ${r.who} para comprovante`);
-      select.title = "Selecionar para anexar comprovante";
-      select.onchange = () => {
-        if (select.checked) state.blSelected.add(r.guestId);
-        else state.blSelected.delete(r.guestId);
-        updateSelection();
-      };
       const txt = document.createElement("span");
       txt.textContent = `${r.who} · ${brDate(r.check_in)} → ${brDate(r.check_out)} · ${r.nights}×${money(r.rate)} (${TYPES[r.type]})${r.paid ? " · Quitado" : " · Deve"}`;
       const amt = document.createElement("b");
       amt.textContent = money(r.amount);
-      line.append(select, txt, amt);
+      line.append(txt, amt);
       card.append(line);
-      if (r.receipts.length) {
-        const receiptList = document.createElement("div");
-        receiptList.className = "bl-receipts";
-        for (const receipt of r.receipts) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "secondary";
-          button.textContent = `Comprovante: ${receipt.original_name}`;
-          button.onclick = () => openPaymentProof(receipt, "bl-msg");
-          const remove = document.createElement("button");
-          remove.type = "button";
-          remove.className = "secondary";
-          remove.textContent = "Excluir";
-          remove.setAttribute("aria-label", `Excluir comprovante ${receipt.original_name}`);
-          remove.onclick = async () => {
-            if (!confirm(`Excluir o comprovante "${receipt.original_name}"? Ele será removido de todas as cobranças vinculadas.`)) return;
-            remove.disabled = true;
-            const { error } = await deletePaymentProof(receipt);
-            await loadBilling();
-            if (error) say("bl-msg", error);
-          };
-          receiptList.append(button, remove);
-        }
-        card.append(receiptList);
-      } else {
-        const noProof = document.createElement("small");
-        noProof.className = "bl-no-proof";
-        noProof.textContent = r.paid
-          ? "Pagamento já registrado antes da exigência de comprovante."
-          : "Selecione esta cobrança acima para anexar comprovante.";
-        card.append(noProof);
-      }
+    }
+    if (expanded) renderDailyPaymentDetails(rows, card);
+    else if (!rows.some((row) => row.receipts.length)) {
+      const noProof = document.createElement("small");
+      noProof.className = "bl-no-proof bl-daily-no-proof";
+      noProof.textContent = rows.every((row) => row.paid)
+        ? "Pagamento já registrado antes da exigência de comprovante."
+        : "Anexe um comprovante para registrar a quitação do quarto.";
+      card.append(noProof);
     }
     box.append(card);
   }
 
-  const memberships = visibleRows.filter((row) => row.kind === "membership");
-  for (const row of memberships) {
+  for (const row of membershipRows) {
     const card = document.createElement("div");
     card.className = "res-card bl-card";
+    const open = Math.max(0, row.amount - row.received);
+    const key = `${row.period}:${row.familyId}`;
+    const expanded = canManageFinance() && expandedMembershipKey === key;
     const head = document.createElement("div");
     head.className = "res-head";
+    const heading = document.createElement("div");
+    heading.className = "bl-payment-heading";
     const title = document.createElement("b");
     title.textContent = `Mensalidade · ${row.who}`;
-    const open = Math.max(0, row.amount - row.received);
     const tag = document.createElement("span");
     tag.className = "tag " + (open ? "reparo" : "bom");
     tag.textContent = open ? `Deve ${money(open)}` : "Quitado";
-    head.append(title, tag);
+    heading.append(title);
+    if (canManageFinance()) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "secondary bl-payment-toggle";
+      toggle.textContent = expanded
+        ? "Fechar quitação"
+        : open > 0 ? "Registrar quitação" : row.receipts.length ? "Ver comprovantes" : "Anexar comprovante";
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.setAttribute("aria-controls", `bl-payment-details-${row.familyId}`);
+      toggle.onclick = () => {
+        expandedMembershipKey = expanded ? null : key;
+        renderBilling();
+      };
+      heading.append(toggle);
+    }
+    head.append(heading, tag);
     card.append(head);
     const line = document.createElement("div");
     line.className = "bl-line";
@@ -287,6 +256,7 @@ export function renderBilling() {
     amount.textContent = `Em aberto ${money(open)}`;
     line.append(description, amount);
     card.append(line);
+    if (expanded) renderMembershipPaymentDetails(row, card);
     if (open > 0) {
       const contacts = state.blMembershipContacts.get(row.familyId) ?? [];
       if (state.blWhatsAppError) {
@@ -337,15 +307,269 @@ export function renderBilling() {
   }
 }
 
+function renderDailyPaymentDetails(rows, card) {
+  const db = getDb();
+  const reservation = rows[0];
+  const details = document.createElement("div");
+  details.className = "bl-payment-details";
+  details.id = `bl-daily-details-${reservation.reservationId}`;
+  const instruction = document.createElement("p");
+  instruction.className = "msg";
+  instruction.textContent = "Um comprovante registra o pagamento de todas as pessoas desta hospedagem.";
+  details.append(instruction);
+
+  const proofLabel = document.createElement("div");
+  proofLabel.className = "bl-payment-proof";
+  const proofTitle = document.createElement("span");
+  proofTitle.textContent = "Comprovantes";
+  const proofInput = document.createElement("input");
+  proofInput.type = "file";
+  proofInput.className = "finance-attachment-input";
+  proofInput.accept = "application/pdf,image/jpeg,image/png";
+  proofInput.multiple = true;
+  proofInput.setAttribute("aria-label", `Adicionar comprovante da hospedagem em ${reservation.room}`);
+  const attachment = document.createElement("label");
+  attachment.className = "btn secondary finance-attachment";
+  attachment.append("Escolher arquivos", proofInput);
+  const attachmentName = document.createElement("span");
+  attachmentName.className = "finance-attachment-name";
+  attachmentName.setAttribute("aria-live", "polite");
+  proofLabel.append(proofTitle, attachment, attachmentName);
+
+  const receipts = [...new Map(rows.flatMap((row) => row.receipts).map((receipt) => [receipt.id, receipt])).values()];
+  if (receipts.length) {
+    const receiptList = document.createElement("div");
+    receiptList.className = "bl-receipts";
+    for (const receipt of receipts) {
+      const view = document.createElement("button");
+      view.type = "button";
+      view.className = "secondary";
+      view.textContent = `Comprovante: ${receipt.original_name}`;
+      view.onclick = () => openPaymentProof(receipt, "bl-msg");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary";
+      remove.textContent = "Excluir";
+      remove.setAttribute("aria-label", `Excluir comprovante ${receipt.original_name}`);
+      remove.onclick = async () => {
+        if (!confirm(`Excluir o comprovante "${receipt.original_name}"? Ele será removido de todas as cobranças vinculadas.`)) return;
+        remove.disabled = true;
+        const { error } = await deletePaymentProof(receipt);
+        await loadBilling();
+        if (error) say("bl-msg", error);
+      };
+      receiptList.append(view, remove);
+    }
+    proofLabel.append(receiptList);
+  }
+  details.append(proofLabel);
+
+  const save = document.createElement("button");
+  save.type = "button";
+  const unpaidRows = rows.filter((row) => !row.paid);
+  save.textContent = unpaidRows.length ? "Anexar comprovante e dar baixa" : "Anexar comprovante";
+  save.disabled = true;
+  proofInput.onchange = () => {
+    const files = [...(proofInput.files ?? [])];
+    attachmentName.textContent = files.length === 1 ? files[0].name : files.length ? `${files.length} arquivos` : "";
+    attachmentName.title = files.map((file) => file.name).join(", ");
+    save.disabled = !files.length;
+  };
+  save.onclick = async () => {
+    const files = [...(proofInput.files ?? [])];
+    if (!files.length) return;
+    save.disabled = true;
+    for (const file of files) {
+      const { data: receipt, error: uploadError } = await uploadPaymentProof(file);
+      if (uploadError) {
+        await loadBilling();
+        say("bl-msg", `Não foi possível concluir o envio: ${uploadError}`);
+        return;
+      }
+      const { error: linkError } = await db.from("payment_receipt_guest_charges")
+        .insert(rows.map((row) => ({ receipt_id: receipt.id, guest_id: row.guestId })));
+      if (linkError) {
+        const cleanupErrors = await cleanupUnlinkedPaymentProof(receipt);
+        await loadBilling();
+        say("bl-msg", [`Não foi possível vincular o comprovante: ${linkError.message}`, ...cleanupErrors].join(" "));
+        return;
+      }
+    }
+    if (unpaidRows.length) {
+      const { error } = await db.from("guest_charges").update({
+        paid: true, paid_at: new Date().toISOString(),
+      }).in("guest_id", unpaidRows.map((row) => row.guestId));
+      if (error) {
+        await loadBilling();
+        say("bl-msg", `Comprovante anexado, mas não foi possível dar baixa: ${error.message}`);
+        return;
+      }
+    }
+    await loadBilling();
+  };
+  details.append(save);
+  card.append(details);
+}
+
+function renderMembershipPaymentDetails(row, card) {
+  const db = getDb();
+  const details = document.createElement("div");
+  details.className = "bl-payment-details";
+  details.id = `bl-payment-details-${row.familyId}`;
+
+  const heading = document.createElement("p");
+  heading.className = "msg";
+  heading.textContent = "Registre o valor recebido e a data. Anexe um comprovante antes de salvar qualquer recebimento.";
+  details.append(heading);
+
+  const form = document.createElement("div");
+  form.className = "bl-payment-form";
+  const receivedLabel = document.createElement("label");
+  receivedLabel.textContent = "Valor recebido";
+  const receivedInput = document.createElement("input");
+  receivedInput.type = "number";
+  receivedInput.min = "0";
+  receivedInput.step = "0.01";
+  receivedInput.value = String(row.received);
+  receivedInput.setAttribute("aria-label", `Valor recebido da mensalidade de ${row.who}`);
+  receivedLabel.append(receivedInput);
+
+  const dateLabel = document.createElement("label");
+  dateLabel.textContent = "Data do pagamento";
+  const dateInput = document.createElement("input");
+  dateInput.type = "date";
+  dateInput.value = row.paidAt;
+  dateInput.setAttribute("aria-label", `Data do pagamento da mensalidade de ${row.who}`);
+  dateLabel.append(dateInput);
+
+  const proofLabel = document.createElement("div");
+  proofLabel.className = "bl-payment-proof";
+  const proofTitle = document.createElement("span");
+  proofTitle.textContent = "Comprovantes";
+  const proofInput = document.createElement("input");
+  proofInput.type = "file";
+  proofInput.className = "finance-attachment-input";
+  proofInput.accept = "application/pdf,image/jpeg,image/png";
+  proofInput.multiple = true;
+  proofInput.setAttribute("aria-label", `Adicionar comprovantes da mensalidade de ${row.who}`);
+  const attachment = document.createElement("label");
+  attachment.className = "btn secondary finance-attachment";
+  attachment.append("Escolher arquivos", proofInput);
+  const attachmentName = document.createElement("span");
+  attachmentName.className = "finance-attachment-name";
+  attachmentName.setAttribute("aria-live", "polite");
+  proofInput.onchange = () => {
+    const files = [...(proofInput.files ?? [])];
+    attachmentName.textContent = files.length === 1 ? files[0].name : files.length ? `${files.length} arquivos` : "";
+    attachmentName.title = files.map((file) => file.name).join(", ");
+  };
+  proofLabel.append(proofTitle, attachment, attachmentName);
+  form.append(receivedLabel, dateLabel, proofLabel);
+  details.append(form);
+
+  if (row.receipts.length) {
+    const receiptList = document.createElement("div");
+    receiptList.className = "bl-receipts";
+    for (const receipt of row.receipts) {
+      const view = document.createElement("button");
+      view.type = "button";
+      view.className = "secondary";
+      view.textContent = `Comprovante: ${receipt.original_name}`;
+      view.onclick = () => openPaymentProof(receipt, "bl-msg");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary";
+      remove.textContent = "Excluir";
+      remove.setAttribute("aria-label", `Excluir comprovante ${receipt.original_name}`);
+      remove.onclick = async () => {
+        if (!confirm(`Excluir o comprovante "${receipt.original_name}"?`)) return;
+        remove.disabled = true;
+        const { error } = await deletePaymentProof(receipt);
+        await loadBilling();
+        if (error) say("bl-msg", error);
+      };
+      receiptList.append(view, remove);
+    }
+    proofLabel.append(receiptList);
+  }
+
+  const save = document.createElement("button");
+  save.type = "button";
+  save.textContent = "Salvar quitação";
+  save.onclick = async () => {
+    if (receivedInput.value === "" || !Number.isFinite(Number(receivedInput.value)) || Number(receivedInput.value) < 0) {
+      say("bl-msg", "Informe um valor recebido válido (zero ou maior).");
+      return;
+    }
+    const receivedAmount = Number(receivedInput.value);
+    const files = [...(proofInput.files ?? [])];
+    if (receivedAmount > 0 && !row.receipts.length && !files.length) {
+      say("bl-msg", `Anexe um comprovante para registrar o recebimento de ${row.who}.`);
+      return;
+    }
+
+    save.disabled = true;
+    let membershipId = row.membershipId;
+    if (!membershipId && files.length) {
+      const { data: created, error } = await db.from("finance_memberships").upsert({
+        family_id: row.familyId, period_month: row.period,
+        expected_amount: row.amount, received_amount: 0, paid_at: null,
+      }, { onConflict: "family_id,period_month" }).select("id").single();
+      if (error) {
+        say("bl-msg", error.message);
+        save.disabled = false;
+        return;
+      }
+      membershipId = created.id;
+    }
+
+    for (const file of files) {
+      const { data: receipt, error: uploadError } = await uploadPaymentProof(file);
+      if (uploadError) {
+        await loadBilling();
+        say("bl-msg", `Não foi possível concluir o envio: ${uploadError}`);
+        return;
+      }
+      const { error: linkError } = await db.from("payment_receipt_memberships")
+        .insert({ receipt_id: receipt.id, membership_id: membershipId });
+      if (linkError) {
+        const cleanupErrors = await cleanupUnlinkedPaymentProof(receipt);
+        await loadBilling();
+        say("bl-msg", [`Não foi possível vincular o comprovante: ${linkError.message}`, ...cleanupErrors].join(" "));
+        return;
+      }
+    }
+
+    const values = {
+      expected_amount: row.amount,
+      received_amount: receivedAmount,
+      paid_at: receivedAmount > 0 ? dateInput.value || null : null,
+    };
+    const result = membershipId
+      ? await db.from("finance_memberships").update(values).eq("id", membershipId)
+      : await db.from("finance_memberships").insert({
+        family_id: row.familyId, period_month: row.period, ...values,
+      });
+    if (result.error) {
+      await loadBilling();
+      say("bl-msg", `Comprovante(s) anexado(s), mas o recebimento não foi salvo: ${result.error.message}`);
+      return;
+    }
+    await loadBilling();
+  };
+  details.append(save);
+  card.append(details);
+}
+
 export function setupBillingListeners() {
-  $("bl-prev").onclick = () => { setState("blMonth", new Date(state.blMonth.getFullYear(), state.blMonth.getMonth() - 1, 1)); loadBilling(); };
-  $("bl-next").onclick = () => { setState("blMonth", new Date(state.blMonth.getFullYear(), state.blMonth.getMonth() + 1, 1)); loadBilling(); };
+  $("bl-prev").onclick = () => { expandedMembershipKey = null; expandedDailyReservationId = null; setState("blMonth", new Date(state.blMonth.getFullYear(), state.blMonth.getMonth() - 1, 1)); loadBilling(); };
+  $("bl-next").onclick = () => { expandedMembershipKey = null; expandedDailyReservationId = null; setState("blMonth", new Date(state.blMonth.getFullYear(), state.blMonth.getMonth() + 1, 1)); loadBilling(); };
   $("bl-status-filter").onchange = () => {
-    setState("blSelected", new Set());
+    expandedDailyReservationId = null;
     renderBilling();
   };
   $("bl-type-filter").onchange = () => {
-    setState("blSelected", new Set());
+    expandedDailyReservationId = null;
     renderBilling();
   };
   $("bl-csv").onclick = () => {

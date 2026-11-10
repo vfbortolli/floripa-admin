@@ -20,7 +20,6 @@ export const state = {
   // Cobrança
   blMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   blRows: [],
-  blSelected: new Set(),
   blMembershipContacts: new Map(),
   blWhatsAppError: null,
   

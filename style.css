@@ -439,11 +439,21 @@ button.person-toggle:focus-visible { outline-offset: -2px; }
 .bl-box.warn b { color: #9a5b00; }
 .bl-card { cursor: default; }
 .bl-card:hover { background: none; }
+.bl-payment-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.bl-payment-toggle { margin: 0; padding: 4px 8px; font-size: 12px; }
+.bl-payment-details { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.bl-payment-details > .msg { margin: 0 0 10px; }
+.bl-payment-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 10px;
+}
+.bl-payment-form label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
+.bl-payment-proof { display: grid; justify-items: start; align-content: start; gap: 4px; color: var(--muted); font-size: 13px; }
+.bl-payment-proof .finance-attachment-name { max-width: 100%; }
+.bl-payment-proof .bl-receipts { margin-top: 0; }
+.bl-payment-form input { width: 100%; min-width: 0; }
+.bl-payment-details > button { margin-top: 10px; }
 .bl-filter { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
-.bl-proof-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
-.bl-proof-tools span { flex: 1 1 280px; color: var(--muted); font-size: 14px; }
 .bl-line { display: flex; align-items: center; gap: 10px; padding: 8px 0 2px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 8px; }
-.bl-line input { width: 18px; height: 18px; flex: none; }
 .bl-line span { flex: 1; min-width: 0; }
 .bl-line b { color: var(--text); white-space: nowrap; }
 .bl-receipts, .finance-proof-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -452,10 +462,11 @@ button.person-toggle:focus-visible { outline-offset: -2px; }
   min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .bl-no-proof { display: block; color: var(--muted); font-size: 12px; margin: 2px 0 4px 28px; }
+.bl-daily-no-proof { margin-left: 0; }
 .finance-proof-list { margin: 0 0 6px; }
 .finance-attachment { position: relative; }
 .finance-attachment:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
-.finance-table td .finance-attachment-input {
+.finance-table td .finance-attachment-input, .bl-payment-proof .finance-attachment-input {
   position: absolute; width: 1px; min-width: 0; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }

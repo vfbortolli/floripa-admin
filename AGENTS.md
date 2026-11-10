@@ -84,7 +84,7 @@ Objeto `state` único compartilhado entre todos os módulos. Campos principais:
 - `spaces`, `families`, `people`, `rates`: dados carregados no `init()`.
 - `current`: espaço selecionado no inventário.
 - Agenda: `agMonth`, `agRoom`, `monthRes`, `pendingRes`, `myReservationIds`.
-- Cobrança: `blMonth`, `blRows`, `blSelected`, `blMembershipContacts`.
+- Cobrança: `blMonth`, `blRows`, `blMembershipContacts`.
 - Financeiro: `fnYear`, `fnMonth`, `fnCategories`, `fnMemberships`, `fnMembershipReceipts`, `fnMembershipRate`, `fnTransactions`, `fnDaily`, `fnDailyAdjustments`, `fnEditingTransaction`.
 - Histórico: `hsRows`.
 - Formulário de reserva: `editing`, `formGuests`, `removedIds`, `readOnly`.
