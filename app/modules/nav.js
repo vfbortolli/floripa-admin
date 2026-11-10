@@ -84,12 +84,7 @@ export const renderNav = (router) => {
   dashboard.textContent = "Painel financeiro";
   dashboard.id = "nav-dashboard";
   dashboard.onclick = () => router.showFinanceDashboard();
-  const finance = document.createElement("button");
-  finance.className = "nav-item";
-  finance.textContent = "Detalhamento";
-  finance.id = "nav-finance";
-  finance.onclick = () => router.showFinance();
-  financeItems.append(dashboard, finance);
+  financeItems.append(dashboard);
 
   if (state.me?.is_admin) {
     const items = addGroup("Administração", "⚙️", "nav-admin");
@@ -113,7 +108,12 @@ export const renderNav = (router) => {
     financeAdmin.textContent = "Receitas e despesas";
     financeAdmin.id = "nav-finance-admin";
     financeAdmin.onclick = () => router.showFinanceAdmin();
-    items.append(peopleBtn, bl, rt);
+    const finance = document.createElement("button");
+    finance.className = "nav-item";
+    finance.textContent = "Mensalidades e Diárias";
+    finance.id = "nav-finance";
+    finance.onclick = () => router.showFinance();
+    items.append(peopleBtn, bl, rt, finance);
     items.append(financeAdmin);
     const hs = document.createElement("button");
     hs.className = "nav-item";
