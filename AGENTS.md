@@ -23,9 +23,10 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 | `app/modules/ui.js` | `show`, `say`, `setView`, `setActive`, `canManageFinance`. |
 | `app/modules/utils.js` | Helpers puros: `fmtDate`, `parseDate`, `nightsBetween`, `brDate`, `money`, `personName`, `whatsappUrl`, `reservableRooms`, `roomById`, `TYPES`. |
 | `app/modules/auth.js` | `showLogin`, `canEdit`, `logout`. |
-| `app/modules/nav.js` | `renderNav()`: constrói a navegação lateral dinamicamente a partir de `state.spaces`. |
+| `app/modules/nav.js` | `renderNav(router)`: constrói a navegação lateral dinamicamente a partir de `state.spaces`. Recebe objeto `router` de `app.js` com as funções de navegação, eliminando imports diretos de views. |
 | `app/modules/inventory.js` | `selectSpace`, `loadItems`, `renderItems`, `parseCsv`, `setupInventoryListeners`. |
-| `app/modules/people.js` | `showPeople`, `loadPeople`, `setupPeopleListeners`. Helpers de histórico: `hsText`, `hsValue`. |
+| `app/modules/audit.js` | Helpers de formatação do histórico de auditoria: `HS_TABLES`, `hsValue`, `hsText`. |
+| `app/modules/people.js` | `showPeople`, `loadPeople`, `setupPeopleListeners`. |
 | `app/modules/rates.js` | `showRates`, `displayRates`, `setupRatesListeners`. |
 | `app/modules/history.js` | `showHistory`, `loadHistory`, `setupHistoryListeners`. |
 | `app/modules/agenda.js` | `showAgenda`, `renderRoomChips`, `loadMonth`, `loadPending`, `renderGantt`, `renderResList`, `renderPendingList`, `openReservation`, `resolveReservation`, `setupAgendaListeners`. |
@@ -134,7 +135,7 @@ Sempre usar `setState(key, value)` ou `updateState(patch)` para mutações; evit
 ### JS — módulos e estado
 - O entry point é **somente** `app/app.js`. Não criar nem recriar `app.js` na raiz do projeto.
 - Importar sempre por caminho relativo (`../app-state.js`, `./utils.js`). Não usar caminhos absolutos.
-- Estado compartilhado vive em `app/app-state.js`. Usar `setState(key, value)` para escrever; evitar `state.x = y` diretamente fora de `app-state.js`. O `rates.js` ainda faz `state.fnYear = year` — isso deve ser corrigido oportunisticamente nas próximas edições.
+- Estado compartilhado vive em `app/app-state.js`. Usar `setState(key, value)` para escrever; evitar `state.x = y` diretamente fora de `app-state.js`.
 - O cliente Supabase é criado uma vez em `createDbClient()` e acessado nos módulos via `getDb()`. Nunca criar um segundo `createClient` num módulo.
 - `getDb()` pode retornar `null` se chamado antes de `createDbClient()`. Isso só ocorreria se um módulo fosse importado antes do `init()`.
 
@@ -159,8 +160,6 @@ Todos os módulos estão publicados. As funcionalidades ativas dependem das segu
 - ✅ **Modularização concluída**: `app.js` raiz (arquivo legado monolítico) foi removido. O código vive exclusivamente em `app/app.js` e `app/modules/*.js`.
 - ⚠️ **Dívidas técnicas conhecidas** (a corrigir oportunisticamente):
   - `rates.js` ainda muta `state.fnYear` diretamente (`state.fnYear = year`) em vez de usar `setState`.
-  - `nav.js` importa todos os módulos de view diretamente, criando acoplamento forte. Ideal: receber um objeto de roteamento de `app.js`.
-  - `hsText` e `hsValue` vivem em `people.js` mas são usados por `history.js` — semânticamente pertencem a um módulo de auditoria separado.
   - `agenda.js` (~24 KB) concentra renderização do Gantt, formulário de reserva e lista de pendências — candidato a ser dividido futuramente.
   - `finance.js` (~28 KB) concentra painel, detalhamento e categorias — candidato a ser dividido futuramente.
 
@@ -169,9 +168,8 @@ Todos os módulos estão publicados. As funcionalidades ativas dependem das segu
 - No Supabase: confirmar que provedor Email está ativo, Site URL e Redirect URLs configurados (`https://vfbortolli.github.io/floripa-admin/`, `http://localhost:8080`) e keep-alive funcionando.
 - Importar inventário dos outros espaços (se houver planilhas).
 - Arquitetura — próximos passos sugeridos (em ordem de impacto/risco):
-  1. Corrigir mutações diretas em `state` (ex.: `rates.js`).
-  2. Extrair `hsText`/`hsValue`/`HS_TABLES` de `people.js` para `app/modules/audit.js`.
-  3. Desacoplar `nav.js` recebendo callbacks de roteamento em vez de importar as views.
-  4. Dividir `agenda.js` em `agenda/index.js`, `agenda/gantt.js`, `agenda/reservation-form.js`, `agenda/pending.js`.
-  5. Dividir `finance.js` em `finance/index.js`, `finance/dashboard.js`, `finance/details.js`.
+  1. ~~Corrigir mutações diretas em `state`~~ ✅ concluído.
+  2. ~~Desacoplar `nav.js` recebendo callbacks de roteamento em vez de importar as views~~ ✅ concluído.
+  3. Dividir `agenda.js` em `agenda/index.js`, `agenda/gantt.js`, `agenda/reservation-form.js`, `agenda/pending.js`.
+  4. Dividir `finance.js` em `finance/index.js`, `finance/dashboard.js`, `finance/details.js`.
 - Ideias de produto: aviso por e-mail ao responsável, PWA (instalar no celular), login com Google, lista de itens que precisam de reparo, botão de importar backup (hoje a restauração é por prompt no README).

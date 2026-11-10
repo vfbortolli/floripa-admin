@@ -10,7 +10,7 @@ const fnPeriod = () => `${state.fnYear}-${String(state.fnMonth + 1).padStart(2, 
 const fnMonthKey = (value) => String(value).slice(0, 7);
 
 export async function showFinance() {
-  state.current = null;
+  setState("current", null);
   setView("finance");
   setActive((b) => b.id === "nav-finance");
   show("fn-transaction-form", canManageFinance());
@@ -20,7 +20,7 @@ export async function showFinance() {
 }
 
 export async function showFinanceDashboard() {
-  state.current = null;
+  setState("current", null);
   setView("dashboard");
   setActive((b) => b.id === "nav-dashboard");
   await loadFinance();

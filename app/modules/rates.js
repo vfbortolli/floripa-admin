@@ -1,11 +1,11 @@
 // modules/rates.js - Gerenciamento de tarifas (sócio e convidado)
-import { state } from "../app-state.js";
+import { state, setState } from "../app-state.js";
 import { show, say, setView, setActive } from "./ui.js";
 import { $ } from "./dom.js";
 import { getDb } from "./db.js";
 
 export async function showRates() {
-  state.current = null;
+  setState("current", null);
   setView("rates");
   setActive((b) => b.id === "nav-rates");
   say("rates-msg", "");
@@ -16,7 +16,7 @@ export async function showRates() {
 
 export async function displayRates(year) {
   const db = getDb();
-  state.fnYear = year;
+  setState("fnYear", year);
   $("fn-membership-rate-year").textContent = String(year);
   $("r-socio").value = state.rates.socio ?? "";
   $("r-convidado").value = state.rates.convidado ?? "";
@@ -46,7 +46,7 @@ export const setupRatesListeners = () => {
       { key: "rate_convidado", value: convidado },
     ]);
     if (error) return say("rates-msg", error.message);
-    state.rates = { socio, convidado };
+    setState("rates", { socio, convidado });
     say("rates-msg", "Valores salvos.");
   };
 
@@ -65,7 +65,7 @@ export const setupRatesListeners = () => {
       { year, amount }, { onConflict: "year" },
     );
     if (error) return say("rates-msg", error.message);
-    state.fnYear = year;
+    setState("fnYear", year);
     await displayRates(year);
     say("rates-msg", `Mensalidade padrão de ${year} salva.`);
   };

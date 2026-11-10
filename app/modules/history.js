@@ -3,21 +3,13 @@ import { state, setState } from "../app-state.js";
 import { show, say, setView, setActive } from "./ui.js";
 import { $ } from "./dom.js";
 import { personName } from "./utils.js";
-import { hsValue, hsText } from "./people.js";
+import { hsValue, hsText, HS_TABLES } from "./audit.js";
 import { getDb } from "./db.js";
 
 const HS_PAGE = 50;
 
-const HS_TABLES = {
-  items: "Item", reservations: "Reserva", reservation_guests: "Pessoa da reserva",
-  allowed_users: "Pessoa", settings: "Valor", guest_charges: "Cobrança",
-  finance_categories: "Categoria financeira", finance_memberships: "Mensalidade",
-  finance_membership_rates: "Valor anual da mensalidade",
-  finance_transactions: "Lançamento financeiro", finance_daily_adjustments: "Ajuste de diárias",
-};
-
 export async function showHistory() {
-  state.current = null;
+  setState("current", null);
   setView("history");
   setActive((b) => b.id === "nav-history");
   setState("hsRows", []);

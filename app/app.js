@@ -18,6 +18,18 @@ import { reservableRooms } from "./modules/utils.js";
 
 const db = createDbClient();
 
+// Router object que centraliza todas as funções de navegação/view
+const router = {
+  showAgenda,
+  showPeople,
+  showRates,
+  showBilling,
+  showHistory,
+  showFinance,
+  showFinanceDashboard,
+  selectSpace,
+};
+
 async function init() {
   setState("me", null);
   setState("people", []);
@@ -60,7 +72,7 @@ async function init() {
   show("app", true);
   $("who").textContent = state.me.name || state.me.email;
 
-  renderNav();
+  renderNav(router);
   showAgenda();
   
   // Setup event listeners para todos os módulos

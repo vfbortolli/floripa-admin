@@ -3,15 +3,8 @@ import { state } from "../app-state.js";
 import { $ } from "./dom.js";
 import { show } from "./ui.js";
 import { reservableRooms } from "./utils.js";
-import { selectSpace } from "./inventory.js";
-import { showPeople } from "./people.js";
-import { showRates } from "./rates.js";
-import { showHistory } from "./history.js";
-import { showAgenda } from "./agenda.js";
-import { showBilling } from "./billing.js";
-import { showFinance, showFinanceDashboard } from "./finance.js";
 
-export const renderNav = () => {
+export const renderNav = (router) => {
   const nav = $("spaces");
   nav.innerHTML = "";
 
@@ -56,7 +49,7 @@ export const renderNav = () => {
     return items;
   };
 
-  const agendaItems = addGroup("Agenda", "📅", "nav-agenda", () => showAgenda());
+  const agendaItems = addGroup("Agenda", "📅", "nav-agenda", () => router.showAgenda());
   for (const room of reservableRooms()) {
     const b = document.createElement("button");
     b.className = "nav-item";
@@ -65,7 +58,7 @@ export const renderNav = () => {
     b.onclick = async () => {
       const { setState } = await import("../app-state.js");
       setState("agRoom", room.id);
-      await showAgenda();
+      await router.showAgenda();
     };
     agendaItems.append(b);
   }
@@ -80,7 +73,7 @@ export const renderNav = () => {
       b.className = "nav-item";
       b.textContent = s.name;
       b.dataset.id = s.id;
-      b.onclick = () => selectSpace(s);
+      b.onclick = () => router.selectSpace(s);
       items.append(b);
     }
   }
@@ -90,12 +83,12 @@ export const renderNav = () => {
   dashboard.className = "nav-item";
   dashboard.textContent = "Painel financeiro";
   dashboard.id = "nav-dashboard";
-  dashboard.onclick = () => showFinanceDashboard();
+  dashboard.onclick = () => router.showFinanceDashboard();
   const finance = document.createElement("button");
   finance.className = "nav-item";
   finance.textContent = "Detalhamento";
   finance.id = "nav-finance";
-  finance.onclick = () => showFinance();
+  finance.onclick = () => router.showFinance();
   financeItems.append(dashboard, finance);
 
   if (state.me?.is_admin) {
@@ -104,23 +97,23 @@ export const renderNav = () => {
     peopleBtn.className = "nav-item";
     peopleBtn.textContent = "Pessoas";
     peopleBtn.id = "nav-people";
-    peopleBtn.onclick = () => showPeople();
+    peopleBtn.onclick = () => router.showPeople();
     const rt = document.createElement("button");
     rt.className = "nav-item";
     rt.textContent = "Valores";
     rt.id = "nav-rates";
-    rt.onclick = () => showRates();
+    rt.onclick = () => router.showRates();
     const bl = document.createElement("button");
     bl.className = "nav-item";
     bl.textContent = "Cobrança";
     bl.id = "nav-billing";
-    bl.onclick = () => showBilling();
+    bl.onclick = () => router.showBilling();
     items.append(peopleBtn, bl, rt);
     const hs = document.createElement("button");
     hs.className = "nav-item";
     hs.textContent = "Histórico";
     hs.id = "nav-history";
-    hs.onclick = () => showHistory();
+    hs.onclick = () => router.showHistory();
     items.append(hs);
   }
 };
