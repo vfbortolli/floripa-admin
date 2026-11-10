@@ -11,7 +11,7 @@ import { showHistory, setupHistoryListeners } from "./modules/history.js";
 import { showAgenda, renderRoomChips, setupAgendaListeners } from "./modules/agenda.js";
 import { showBilling, setupBillingListeners } from "./modules/billing.js";
 import { 
-  showFinance, showFinanceDashboard, loadFinance, updateFinanceCategoryOptions, setupFinanceListeners
+  showFinance, showFinanceAdmin, showFinanceDashboard, loadFinance, updateFinanceCategoryOptions, setupFinanceListeners
 } from "./modules/finance.js";
 import { renderNav } from "./modules/nav.js";
 import { reservableRooms } from "./modules/utils.js";
@@ -26,6 +26,7 @@ const router = {
   showBilling,
   showHistory,
   showFinance,
+  showFinanceAdmin,
   showFinanceDashboard,
   selectSpace,
 };

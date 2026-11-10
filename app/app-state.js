@@ -32,7 +32,6 @@ export const state = {
   fnTransactions: [],
   fnDaily: [],
   fnDailyAdjustments: [],
-  fnEditingTransaction: null,
   
   // Histórico
   hsRows: [],

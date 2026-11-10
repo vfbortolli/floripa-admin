@@ -8,7 +8,7 @@ export const say = (id, text) => { $(id).textContent = text || ""; };
 export const canManageFinance = () => Boolean(state.me?.is_admin);
 
 export const setView = (name) => {
-  const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "dashboard", "finance", "history"];
+  const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "dashboard", "finance", "finance-admin", "history"];
   VIEWS.forEach((v) => show(v, v === name));
 };
 
@@ -18,4 +18,4 @@ export const setActive = (match) => {
     group.classList.toggle("has-active", !!group.querySelector(".nav-item.active")));
 };
 
-export const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "dashboard", "finance", "history"];
+export const VIEWS = ["inventory", "people", "agenda", "rates", "billing", "dashboard", "finance", "finance-admin", "history"];

@@ -8,13 +8,32 @@ import { money, parseDate } from "./utils.js";
 
 const fnPeriod = () => `${state.fnYear}-${String(state.fnMonth + 1).padStart(2, "0")}-01`;
 const fnMonthKey = (value) => String(value).slice(0, 7);
+const TRANSACTIONS_PAGE_SIZE = 25;
+const TRANSACTIONS_FETCH_SIZE = 500;
+let transactionPage = 0;
+const transactionDrafts = new Map();
+
+function resetTransactionFilters(month = "") {
+  $("fn-filter-month").value = month;
+  for (const id of ["fn-filter-kind", "fn-filter-category", "fn-filter-description", "fn-filter-min", "fn-filter-max"]) {
+    $(id).value = "";
+  }
+  transactionPage = 0;
+}
 
 export async function showFinance() {
   setState("current", null);
   setView("finance");
   setActive((b) => b.id === "nav-finance");
-  show("fn-transaction-form", canManageFinance());
-  show("fn-category-form", canManageFinance());
+  await loadFinance();
+}
+
+export async function showFinanceAdmin() {
+  if (!canManageFinance()) return showFinanceDashboard();
+  setState("current", null);
+  setView("finance-admin");
+  setActive((b) => b.id === "nav-finance-admin");
+  resetTransactionFilters(String(new Date().getMonth() + 1).padStart(2, "0"));
   $("fn-date").value = fnPeriod();
   await loadFinance();
 }
@@ -26,22 +45,35 @@ export async function showFinanceDashboard() {
   await loadFinance();
 }
 
+async function loadFinanceTransactions(db, start, end) {
+  const rows = [];
+  for (let offset = 0; ; offset += TRANSACTIONS_FETCH_SIZE) {
+    const { data, error } = await db.from("finance_transactions").select("*")
+      .gte("transaction_date", start).lt("transaction_date", end)
+      .order("transaction_date").order("id").range(offset, offset + TRANSACTIONS_FETCH_SIZE - 1);
+    if (error) return { data: null, error };
+    if (!Array.isArray(data)) return { data: null, error: { message: "Não foi possível carregar os lançamentos financeiros." } };
+    rows.push(...data);
+    if (data.length < TRANSACTIONS_FETCH_SIZE) return { data: rows, error: null };
+  }
+}
+
 export async function loadFinance() {
   const db = getDb();
   const start = `${state.fnYear}-01-01`, end = `${state.fnYear + 1}-01-01`;
   $("fn-year").value = state.fnYear;
+  $("fn-admin-year").value = state.fnYear;
   $("fn-dashboard-year").value = state.fnYear;
   $("fn-dashboard-year-label").textContent = String(state.fnYear);
-  show("fn-transaction-form", canManageFinance());
-  show("fn-category-form", canManageFinance());
   say("fn-msg", ""); 
+  say("fn-admin-msg", "");
   say("fn-dashboard-msg", "");
   
   const [categories, memberships, membershipRate, transactions, daily, adjustments] = await Promise.all([
     db.from("finance_categories").select("*").order("kind").order("name"),
     db.from("finance_memberships").select("*").gte("period_month", start).lt("period_month", end),
     db.from("finance_membership_rates").select("amount").eq("year", state.fnYear).maybeSingle(),
-    db.from("finance_transactions").select("*").gte("transaction_date", start).lt("transaction_date", end).order("transaction_date"),
+    loadFinanceTransactions(db, start, end),
     db.rpc("get_finance_daily", { p_year: state.fnYear }),
     db.from("finance_daily_adjustments").select("*").gte("period_month", start).lt("period_month", end),
   ]);
@@ -49,6 +81,7 @@ export async function loadFinance() {
   const failed = [categories, memberships, membershipRate, transactions, daily, adjustments].find((result) => result.error);
   if (failed) {
     say("fn-msg", failed.error.message); 
+    say("fn-admin-msg", failed.error.message);
     say("fn-dashboard-msg", failed.error.message);
     return;
   }
@@ -63,6 +96,7 @@ export async function loadFinance() {
       .in("membership_id", state.fnMemberships.map((r) => r.id));
     if (receiptError) {
       say("fn-msg", receiptError.message); 
+      say("fn-admin-msg", receiptError.message);
       say("fn-dashboard-msg", receiptError.message);
       return;
     }
@@ -80,6 +114,7 @@ export async function loadFinance() {
   setState("fnDailyAdjustments", adjustments.data ?? []);
   
   updateFinanceCategoryOptions();
+  updateTransactionFilterCategories();
   renderFinanceDashboard();
   renderFinanceDetails();
   renderFinanceCategories();
@@ -513,25 +548,205 @@ export function renderFinanceDaily(data, period) {
   }
 }
 
-export function updateFinanceCategoryOptions() {
-  const select = $("fn-category");
-  select.innerHTML = "";
-  const categories = state.fnCategories.filter((c) => c.active && c.kind === ($("fn-kind").value || "income"));
+function populateTransactionCategories(select, kind, selectedId = null) {
+  select.replaceChildren();
+  const categories = state.fnCategories.filter((c) =>
+    (c.active || String(c.id) === String(selectedId)) && c.kind === kind);
+  if (!categories.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Nenhuma categoria disponível";
+    select.append(option);
+  }
   for (const c of categories) {
     const option = document.createElement("option");
     option.value = c.id;
-    option.textContent = c.name;
+    option.textContent = `${c.name}${c.active ? "" : " (desativada)"}`;
     select.append(option);
   }
+  if (categories.some((c) => String(c.id) === String(selectedId))) select.value = String(selectedId);
+}
+
+export function updateFinanceCategoryOptions() {
+  populateTransactionCategories($("fn-category"), $("fn-kind").value);
+}
+
+function updateTransactionFilterCategories() {
+  const select = $("fn-filter-category");
+  const selected = select.value;
+  const used = new Set(state.fnTransactions.map((transaction) => String(transaction.category_id)));
+  select.replaceChildren();
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "Todas as categorias";
+  select.append(all);
+  const categories = state.fnCategories.filter((category) => category.active || used.has(String(category.id)))
+    .slice().sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  for (const category of categories) {
+    const option = document.createElement("option");
+    option.value = category.id;
+    option.textContent = `${category.name}${category.active ? "" : " (desativada)"}`;
+    select.append(option);
+  }
+  select.value = categories.some((category) => String(category.id) === selected) ? selected : "";
+}
+
+function renderTransactionEditor(row, transaction, draft) {
+  const cell = document.createElement("td");
+  cell.colSpan = 6;
+  cell.className = "finance-transaction-edit-cell";
+  const form = document.createElement("form");
+  form.className = "finance-transaction-editor";
+  form.setAttribute("aria-label", `Editar lançamento de ${parseDate(transaction.transaction_date).toLocaleDateString("pt-BR")}`);
+  const field = (labelText, control) => {
+    const label = document.createElement("label");
+    label.textContent = labelText;
+    label.append(control);
+    form.append(label);
+    return control;
+  };
+  const date = field("Data", document.createElement("input"));
+  date.type = "date";
+  date.required = true;
+  date.value = draft.transaction_date;
+  const kind = field("Tipo", document.createElement("select"));
+  for (const [value, label] of [["income", "Receita"], ["expense", "Despesa"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    kind.append(option);
+  }
+  kind.value = draft.kind;
+  const category = field("Categoria", document.createElement("select"));
+  category.required = true;
+  populateTransactionCategories(category, draft.kind, draft.category_id);
+  draft.category_id = category.value;
+  const description = field("Descrição", document.createElement("input"));
+  description.value = draft.description;
+  const amount = field("Valor (R$)", document.createElement("input"));
+  amount.type = "number";
+  amount.min = "0.01";
+  amount.step = "0.01";
+  amount.required = true;
+  amount.value = draft.amount;
+  date.oninput = () => { draft.transaction_date = date.value; };
+  kind.onchange = () => {
+    draft.kind = kind.value;
+    populateTransactionCategories(category, draft.kind, transaction.category_id);
+    draft.category_id = category.value;
+  };
+  category.onchange = () => { draft.category_id = category.value; };
+  description.oninput = () => { draft.description = description.value; };
+  amount.oninput = () => { draft.amount = amount.value; };
+  const actions = document.createElement("div");
+  actions.className = "finance-transaction-actions";
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.textContent = "Salvar";
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "secondary";
+  cancel.textContent = "Cancelar";
+  save.disabled = draft.saving;
+  cancel.disabled = draft.saving;
+  for (const control of [date, kind, category, description, amount]) control.disabled = draft.saving;
+  cancel.onclick = () => {
+    transactionDrafts.delete(transaction.id);
+    renderFinanceTransactions();
+    [...$("fn-transactions").rows].find((item) => item.dataset.transactionId === String(transaction.id))
+      ?.querySelector("button")?.focus();
+  };
+  actions.append(save, cancel);
+  form.append(actions);
+  if (draft.error) {
+    const error = document.createElement("p");
+    error.className = "msg finance-transaction-error";
+    error.setAttribute("role", "alert");
+    error.textContent = draft.error;
+    form.append(error);
+  }
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (!canManageFinance()) {
+      draft.error = "Apenas administradores podem gerenciar lançamentos.";
+      return renderFinanceTransactions();
+    }
+    if (draft.saving || !form.reportValidity()) return;
+    draft.saving = true;
+    draft.error = "";
+    renderFinanceTransactions();
+    const { error } = await getDb().from("finance_transactions").update({
+      transaction_date: draft.transaction_date,
+      kind: draft.kind,
+      category_id: Number(draft.category_id),
+      description: draft.description.trim(),
+      amount: Number(draft.amount),
+    }).eq("id", transaction.id);
+    if (error) {
+      draft.saving = false;
+      draft.error = error.message;
+      say("fn-admin-msg", `Não foi possível salvar o lançamento: ${error.message}`);
+      return renderFinanceTransactions();
+    }
+    transactionDrafts.delete(transaction.id);
+    await loadFinance();
+  };
+  cell.append(form);
+  row.append(cell);
 }
 
 export function renderFinanceTransactions() {
   const db = getDb();
   const tbody = $("fn-transactions");
   tbody.innerHTML = "";
-  for (const t of state.fnTransactions) {
+  const month = $("fn-filter-month").value;
+  const kind = $("fn-filter-kind").value;
+  const categoryId = $("fn-filter-category").value;
+  const description = $("fn-filter-description").value.trim().toLocaleLowerCase("pt-BR");
+  const minInput = $("fn-filter-min");
+  const maxInput = $("fn-filter-max");
+  const min = minInput.value === "" ? null : Number(minInput.value);
+  const max = maxInput.value === "" ? null : Number(maxInput.value);
+  const invalidRange = !minInput.validity.valid || !maxInput.validity.valid || (min !== null && max !== null && min > max);
+  const rows = invalidRange ? [] : state.fnTransactions.filter((t) =>
+    (!month || t.transaction_date.slice(5, 7) === month) &&
+    (!kind || t.kind === kind) &&
+    (!categoryId || String(t.category_id) === categoryId) &&
+    (!description || (t.description ?? "").toLocaleLowerCase("pt-BR").includes(description)) &&
+    (min === null || Number(t.amount) >= min) &&
+    (max === null || Number(t.amount) <= max));
+  const pageCount = Math.max(1, Math.ceil(rows.length / TRANSACTIONS_PAGE_SIZE));
+  transactionPage = Math.min(transactionPage, pageCount - 1);
+  $("fn-filter-msg").textContent = invalidRange
+    ? "Informe valores válidos e um mínimo menor ou igual ao máximo."
+    : `${rows.length} ${rows.length === 1 ? "lançamento encontrado" : "lançamentos encontrados"}.`;
+  $("fn-page-label").textContent = `Página ${transactionPage + 1} de ${pageCount}`;
+  $("fn-page-prev").disabled = transactionPage === 0;
+  $("fn-page-next").disabled = transactionPage >= pageCount - 1;
+  show("fn-edit-msg", transactionDrafts.size > 0);
+  $("fn-edit-msg").textContent = transactionDrafts.size
+    ? `${transactionDrafts.size} ${transactionDrafts.size === 1 ? "edição não salva" : "edições não salvas"} (inclusive em outras páginas ou filtros).`
+    : "";
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.className = "empty";
+    cell.textContent = invalidRange ? "Corrija a faixa de valores para consultar." : "Nenhum lançamento encontrado para os filtros selecionados.";
+    row.append(cell);
+    tbody.append(row);
+  }
+  const pageRows = rows.slice(transactionPage * TRANSACTIONS_PAGE_SIZE, (transactionPage + 1) * TRANSACTIONS_PAGE_SIZE);
+  for (const t of pageRows) {
     const category = state.fnCategories.find((c) => c.id === t.category_id);
     const row = document.createElement("tr");
+    row.dataset.transactionId = t.id;
+    const draft = transactionDrafts.get(t.id);
+    if (draft && canManageFinance()) {
+      renderTransactionEditor(row, t, draft);
+      tbody.append(row);
+      continue;
+    }
     
     const date = document.createElement("td");
     date.dataset.label = "Data"; 
@@ -561,6 +776,7 @@ export function renderFinanceTransactions() {
     
     if (canManageFinance()) {
       const actions = document.createElement("td");
+      actions.dataset.label = "Ações";
       const actionButtons = document.createElement("div");
       actionButtons.className = "finance-transaction-actions";
       const editBtn = document.createElement("button");
@@ -568,15 +784,13 @@ export function renderFinanceTransactions() {
       editBtn.className = "secondary"; 
       editBtn.textContent = "Editar";
       editBtn.onclick = () => {
-        setState("fnEditingTransaction", t.id);
-        $("fn-kind").value = t.kind;
-        updateFinanceCategoryOptions();
-        $("fn-category").value = t.category_id;
-        $("fn-date").value = t.transaction_date;
-        $("fn-description").value = t.description;
-        $("fn-amount").value = t.amount;
-        $("fn-transaction-save").textContent = "Atualizar";
-        show("fn-transaction-cancel", true);
+        transactionDrafts.set(t.id, {
+          transaction_date: t.transaction_date, kind: t.kind, category_id: t.category_id,
+          description: t.description ?? "", amount: t.amount, saving: false, error: "",
+        });
+        renderFinanceTransactions();
+        [...tbody.rows].find((item) => item.dataset.transactionId === String(t.id))
+          ?.querySelector("input")?.focus();
       };
       
       const delBtn = document.createElement("button");
@@ -586,7 +800,7 @@ export function renderFinanceTransactions() {
       delBtn.onclick = async () => {
         if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
         const { error } = await db.from("finance_transactions").delete().eq("id", t.id);
-        if (error) return say("fn-msg", error.message);
+        if (error) return say("fn-admin-msg", error.message);
         await loadFinance();
       };
       
@@ -628,7 +842,7 @@ export function renderFinanceCategories() {
         if (!newName || newName === c.name) return;
         (async () => {
           const { error } = await db.from("finance_categories").update({ name: newName }).eq("id", c.id);
-          if (error) return say("fn-msg", error.message);
+          if (error) return say("fn-admin-msg", error.message);
           await loadFinance();
         })();
       };
@@ -641,7 +855,7 @@ export function renderFinanceCategories() {
       toggleBtn.onclick = () => {
         (async () => {
           const { error } = await db.from("finance_categories").update({ active: !c.active }).eq("id", c.id);
-          if (error) return say("fn-msg", error.message);
+          if (error) return say("fn-admin-msg", error.message);
           await loadFinance();
         })();
       };
@@ -689,6 +903,17 @@ export function setupFinanceListeners() {
     await loadFinance();
   };
 
+  $("fn-admin-load").onclick = async () => {
+    const year = Number($("fn-admin-year").value);
+    if (!Number.isInteger(year) || year < 1900 || year > 9998) {
+      return say("fn-admin-msg", "Informe um ano entre 1900 e 9998.");
+    }
+    setState("fnYear", year);
+    transactionPage = 0;
+    $("fn-date").value = fnPeriod();
+    await loadFinance();
+  };
+
   $("fn-prev").onclick = async () => {
     if (state.fnYear === 1900 && state.fnMonth === 0) return;
     if (state.fnMonth === 0) {
@@ -713,8 +938,28 @@ export function setupFinanceListeners() {
 
   $("fn-kind").onchange = updateFinanceCategoryOptions;
 
+  for (const id of ["fn-filter-month", "fn-filter-kind", "fn-filter-category", "fn-filter-description", "fn-filter-min", "fn-filter-max"]) {
+    $(id).oninput = () => {
+      transactionPage = 0;
+      renderFinanceTransactions();
+    };
+  }
+  $("fn-filter-clear").onclick = () => {
+    resetTransactionFilters();
+    renderFinanceTransactions();
+  };
+  $("fn-page-prev").onclick = () => {
+    if (transactionPage > 0) transactionPage--;
+    renderFinanceTransactions();
+  };
+  $("fn-page-next").onclick = () => {
+    transactionPage++;
+    renderFinanceTransactions();
+  };
+
   $("fn-transaction-form").onsubmit = async (event) => {
     event.preventDefault();
+    if (!canManageFinance()) return say("fn-admin-msg", "Apenas administradores podem gerenciar lançamentos.");
     const payload = {
       kind: $("fn-kind").value,
       category_id: Number($("fn-category").value),
@@ -722,33 +967,21 @@ export function setupFinanceListeners() {
       description: $("fn-description").value.trim(),
       amount: Number($("fn-amount").value),
     };
-    const query = state.fnEditingTransaction
-      ? db.from("finance_transactions").update(payload).eq("id", state.fnEditingTransaction)
-      : db.from("finance_transactions").insert(payload);
-    const { error } = await query;
-    if (error) return say("fn-msg", error.message);
-    setState("fnEditingTransaction", null);
-    $("fn-transaction-form").reset();
-    $("fn-transaction-save").textContent = "Adicionar";
-    show("fn-transaction-cancel", false);
-    await loadFinance();
-  };
-
-  $("fn-transaction-cancel").onclick = () => {
-    setState("fnEditingTransaction", null);
+    const { error } = await db.from("finance_transactions").insert(payload);
+    if (error) return say("fn-admin-msg", error.message);
     $("fn-transaction-form").reset();
     updateFinanceCategoryOptions();
-    $("fn-transaction-save").textContent = "Adicionar";
-    show("fn-transaction-cancel", false);
+    await loadFinance();
   };
 
   $("fn-category-form").onsubmit = async (event) => {
     event.preventDefault();
+    if (!canManageFinance()) return say("fn-admin-msg", "Apenas administradores podem gerenciar categorias.");
     const { error } = await db.from("finance_categories").insert({
       kind: $("fn-category-kind").value,
       name: $("fn-category-name").value.trim(),
     });
-    if (error) return say("fn-msg", error.message);
+    if (error) return say("fn-admin-msg", error.message);
     $("fn-category-form").reset();
     await loadFinance();
   };

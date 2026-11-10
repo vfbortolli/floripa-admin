@@ -108,7 +108,13 @@ export const renderNav = (router) => {
     bl.textContent = "Cobrança";
     bl.id = "nav-billing";
     bl.onclick = () => router.showBilling();
+    const financeAdmin = document.createElement("button");
+    financeAdmin.className = "nav-item";
+    financeAdmin.textContent = "Receitas e despesas";
+    financeAdmin.id = "nav-finance-admin";
+    financeAdmin.onclick = () => router.showFinanceAdmin();
     items.append(peopleBtn, bl, rt);
+    items.append(financeAdmin);
     const hs = document.createElement("button");
     hs.className = "nav-item";
     hs.textContent = "Histórico";
