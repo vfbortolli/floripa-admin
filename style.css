@@ -405,6 +405,24 @@ button.person-toggle:focus-visible { outline-offset: -2px; }
   #fn-daily td:last-child input { width: 110px; min-width: 110px; }
 }
 
+.finance-memberships-wrap { overflow-x: auto; }
+.finance-memberships-table { min-width: 720px; table-layout: fixed; margin-top: 0; }
+.finance-memberships-table thead { display: table-header-group; width: auto; }
+.finance-memberships-table tbody { display: table-row-group; width: auto; }
+.finance-memberships-table tbody tr { display: table-row; }
+.finance-memberships-table tbody th { display: table-cell; }
+.finance-memberships-table tbody td { display: table-cell; }
+.finance-memberships-table tbody td::before { display: none; }
+.finance-memberships-table th:first-child, .finance-memberships-table td:first-child { width: 14%; }
+.finance-memberships-table th:nth-child(2), .finance-memberships-table td:nth-child(2) { width: 12%; }
+.finance-memberships-table th:nth-child(3), .finance-memberships-table td:nth-child(3) { width: 15%; }
+.finance-memberships-table th:nth-child(4), .finance-memberships-table td:nth-child(4) { width: 20%; }
+.finance-memberships-table th:nth-child(5), .finance-memberships-table td:nth-child(5) { width: 11%; }
+.finance-memberships-table th:nth-child(7), .finance-memberships-table td:nth-child(7) { width: 76px; }
+.finance-memberships-table th, .finance-memberships-table td { padding: 6px 4px; }
+.finance-memberships-table td:last-child { text-align: left; }
+.finance-memberships-table .finance-proof-list { min-width: 0; }
+
 /* Agenda */
 .month-nav { display: flex; align-items: center; gap: 10px; margin-right: auto; }
 .month-nav b::first-letter { text-transform: uppercase; }
@@ -430,6 +448,9 @@ button.person-toggle:focus-visible { outline-offset: -2px; }
 .bl-line b { color: var(--text); white-space: nowrap; }
 .bl-receipts, .finance-proof-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .bl-receipts button, .finance-proof-list button { font-size: 12px; padding: 5px 8px; }
+.finance-table .finance-proof-list button {
+  min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .bl-no-proof { display: block; color: var(--muted); font-size: 12px; margin: 2px 0 4px 28px; }
 .finance-proof-list { margin: 0 0 6px; }
 .finance-attachment { position: relative; }

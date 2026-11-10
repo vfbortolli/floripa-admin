@@ -396,6 +396,7 @@ export function renderFinanceMemberships(data, period) {
         open.type = "button";
         open.className = "secondary";
         open.textContent = receipt.original_name;
+        open.title = receipt.original_name;
         open.onclick = () => openPaymentProof(receipt, "fn-msg");
         const remove = document.createElement("button");
         remove.type = "button";
