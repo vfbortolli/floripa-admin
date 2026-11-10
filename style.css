@@ -242,12 +242,13 @@ button.person-toggle:focus-visible { outline-offset: -2px; }
 .finance-dashboard-detail-heading .sub { margin: 0; text-transform: capitalize; }
 .finance-dashboard-balance { display: grid; gap: 2px; text-align: right; color: var(--muted); font-size: 12px; }
 .finance-dashboard-balance strong { color: var(--primary-dark); font-size: 18px; }
-.finance-breakdown-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.finance-breakdown-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
 .finance-breakdown { min-width: 0; border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
 .finance-breakdown-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
 .finance-breakdown-heading h4 { margin: 0; font-size: 15px; }
 .finance-breakdown-heading > strong { white-space: nowrap; }
 .finance-breakdown.income .finance-breakdown-heading > strong { color: var(--primary-dark); }
+.finance-breakdown.pending .finance-breakdown-heading > strong { color: #8a6500; }
 .finance-breakdown.expense .finance-breakdown-heading > strong { color: #8d4a3b; }
 .finance-breakdown-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .finance-breakdown-row:last-child { border-bottom: 0; }

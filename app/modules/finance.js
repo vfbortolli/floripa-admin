@@ -69,20 +69,25 @@ export async function loadFinance() {
   say("fn-admin-msg", "");
   say("fn-dashboard-msg", "");
   
-  const [categories, memberships, membershipRate, transactions, daily, adjustments] = await Promise.all([
+  const [categories, memberships, membershipRate, transactions, daily, dailyReceived, adjustments] = await Promise.all([
     db.from("finance_categories").select("*").order("kind").order("name"),
     db.from("finance_memberships").select("*").gte("period_month", start).lt("period_month", end),
     db.from("finance_membership_rates").select("amount").eq("year", state.fnYear).maybeSingle(),
     loadFinanceTransactions(db, start, end),
     db.rpc("get_finance_daily", { p_year: state.fnYear }),
+    db.rpc("get_finance_daily_received", { p_year: state.fnYear }),
     db.from("finance_daily_adjustments").select("*").gte("period_month", start).lt("period_month", end),
   ]);
   
-  const failed = [categories, memberships, membershipRate, transactions, daily, adjustments].find((result) => result.error);
+  const failed = [categories, memberships, membershipRate, transactions, daily, dailyReceived, adjustments]
+    .find((result) => result.error);
   if (failed) {
-    say("fn-msg", failed.error.message); 
-    say("fn-admin-msg", failed.error.message);
-    say("fn-dashboard-msg", failed.error.message);
+    const message = dailyReceived.error?.code === "PGRST202"
+      ? `Execute supabase/phase2t.sql no Supabase antes de consultar o painel. Detalhe: ${dailyReceived.error.message}`
+      : failed.error.message;
+    say("fn-msg", message);
+    say("fn-admin-msg", message);
+    say("fn-dashboard-msg", message);
     return;
   }
   
@@ -111,6 +116,7 @@ export async function loadFinance() {
   setState("fnMembershipRate", membershipRate.data ? Number(membershipRate.data.amount) : null);
   setState("fnTransactions", transactions.data ?? []);
   setState("fnDaily", daily.data ?? []);
+  setState("fnDailyReceived", dailyReceived.data ?? []);
   setState("fnDailyAdjustments", adjustments.data ?? []);
   
   updateFinanceCategoryOptions();
@@ -127,6 +133,8 @@ export function fnMonthlyData(monthIndex) {
       .map((r) => [Number(r.family_id), r])),
     daily: state.fnDaily.filter((r) => fnMonthKey(r.period_month) === monthKey)
       .reduce((map, r) => map.set(Number(r.family_id), (map.get(Number(r.family_id)) ?? 0) + Number(r.amount)), new Map()),
+    dailyReceived: state.fnDailyReceived.filter((r) => fnMonthKey(r.period_month) === monthKey)
+      .reduce((map, r) => map.set(Number(r.family_id), (map.get(Number(r.family_id)) ?? 0) + Number(r.amount)), new Map()),
     adjustments: new Map(state.fnDailyAdjustments.filter((r) => fnMonthKey(r.period_month) === monthKey)
       .map((r) => [Number(r.family_id), r])),
     categoryTotals: state.fnTransactions.filter((r) => fnMonthKey(r.transaction_date) === monthKey)
@@ -139,25 +147,44 @@ export function fnDailyTotal(data) {
     sum + Number(data.adjustments.get(family.id)?.amount ?? data.daily.get(family.id) ?? 0), 0);
 }
 
+function fnDailyReceivedTotal(data) {
+  return state.families.reduce((sum, family) => {
+    const total = Number(data.adjustments.get(family.id)?.amount ?? data.daily.get(family.id) ?? 0);
+    const received = Number(data.dailyReceived.get(family.id) ?? 0);
+    return sum + Math.min(total, received);
+  }, 0);
+}
+
 export function fnFinanceSummary(data) {
   const usedCategories = new Set(state.fnTransactions.map((r) => String(r.category_id)));
   const categories = state.fnCategories.filter((c) => c.active || usedCategories.has(String(c.id)));
   const amount = (category) => data.categoryTotals.get(String(category.id)) ?? 0;
-  const memberships = [...data.memberships.values()]
+  const membershipReceived = [...data.memberships.values()]
     .reduce((sum, row) => sum + Number(row.received_amount), 0);
+  const membershipExpected = state.families.reduce((sum, family) =>
+    sum + Number(state.fnMembershipRate ?? data.memberships.get(family.id)?.expected_amount ?? 0), 0);
+  const pendingMemberships = Math.max(0, membershipExpected - membershipReceived);
   const incomeCategories = categories.filter((category) => category.kind === "income");
   const expenseCategories = categories.filter((category) => category.kind === "expense");
   const daily = fnDailyTotal(data);
+  const dailyReceived = fnDailyReceivedTotal(data);
+  const pendingDaily = Math.max(0, daily - dailyReceived);
   const otherIncome = incomeCategories.reduce((sum, category) => sum + amount(category), 0);
   const expenses = expenseCategories.reduce((sum, category) => sum + amount(category), 0);
+  const income = membershipReceived + dailyReceived + otherIncome;
   return {
-    income: memberships + daily + otherIncome,
+    income,
     expenses,
-    balance: memberships + daily + otherIncome - expenses,
+    balance: income - expenses,
     incomeRows: [
-      { label: "Mensalidades", amount: memberships },
-      { label: "Diárias", amount: daily },
+      { label: "Mensalidades", amount: membershipReceived },
+      { label: "Diárias", amount: dailyReceived },
       ...incomeCategories.map((category) => ({ label: category.name, amount: amount(category) })),
+    ],
+    pending: pendingMemberships + pendingDaily,
+    pendingRows: [
+      { label: "Mensalidades", amount: pendingMemberships },
+      { label: "Diárias", amount: pendingDaily },
     ],
     expenseRows: expenseCategories.map((category) => ({ label: category.name, amount: amount(category) })),
   };
@@ -165,6 +192,7 @@ export function fnFinanceSummary(data) {
 
 export function fnFinanceYearSummary(currentDate = new Date()) {
   const incomeRows = new Map();
+  const pendingRows = new Map();
   const expenseRows = new Map();
   const lastClosedMonth = state.fnYear < currentDate.getFullYear()
     ? 11
@@ -176,6 +204,9 @@ export function fnFinanceYearSummary(currentDate = new Date()) {
     for (const row of summary.incomeRows) {
       incomeRows.set(row.label, (incomeRows.get(row.label) ?? 0) + row.amount);
     }
+    for (const row of summary.pendingRows) {
+      pendingRows.set(row.label, (pendingRows.get(row.label) ?? 0) + row.amount);
+    }
     for (const row of summary.expenseRows) {
       expenseRows.set(row.label, (expenseRows.get(row.label) ?? 0) + row.amount);
     }
@@ -184,9 +215,11 @@ export function fnFinanceYearSummary(currentDate = new Date()) {
   const expenses = [...expenseRows.values()].reduce((sum, amount) => sum + amount, 0);
   return {
     income,
+    pending: [...pendingRows.values()].reduce((sum, amount) => sum + amount, 0),
     expenses,
     balance: income - expenses,
     incomeRows: [...incomeRows].map(([label, amount]) => ({ label, amount })),
+    pendingRows: [...pendingRows].map(([label, amount]) => ({ label, amount })),
     expenseRows: [...expenseRows].map(([label, amount]) => ({ label, amount })),
     lastClosedMonth,
   };
@@ -217,12 +250,13 @@ export function renderFinanceDashboard() {
     card.type = "button";
     card.className = "finance-month-card";
     card.setAttribute("aria-pressed", String(i === state.fnMonth));
-    card.setAttribute("aria-label", `${monthName}: receitas ${money(summary.income)}, despesas ${money(summary.expenses)}, balanço ${money(summary.balance)}. Ver detalhes.`);
+    card.setAttribute("aria-label", `${monthName}: receitas recebidas ${money(summary.income)}, a receber ${money(summary.pending)}, despesas ${money(summary.expenses)}, balanço ${money(summary.balance)}. Ver detalhes.`);
     const title = document.createElement("span");
     title.className = "finance-month-card-title";
     title.textContent = monthName;
     card.append(title);
-    addMetric(card, "Receitas", summary.income, "income");
+    addMetric(card, "Recebido", summary.income, "income");
+    addMetric(card, "A receber", summary.pending, "pending");
     addMetric(card, "Despesas", summary.expenses, "expense");
     addMetric(card, "Balanço", summary.balance, "balance");
     card.onclick = () => {
@@ -252,8 +286,10 @@ export function renderFinanceDashboardYear() {
   $("fn-dashboard-annual-label").textContent = periodLabel;
   $("fn-dashboard-annual-balance").textContent = money(summary.balance);
   $("fn-dashboard-annual-income-total").textContent = money(summary.income);
+  $("fn-dashboard-annual-pending-total").textContent = money(summary.pending);
   $("fn-dashboard-annual-expense-total").textContent = money(summary.expenses);
   renderFinanceBreakdownRows($("fn-dashboard-annual-income"), summary.incomeRows);
+  renderFinanceBreakdownRows($("fn-dashboard-annual-pending"), summary.pendingRows);
   renderFinanceBreakdownRows($("fn-dashboard-annual-expenses"), summary.expenseRows);
 }
 
@@ -264,9 +300,11 @@ export function renderFinanceDashboardDetails() {
   $("fn-dashboard-month-label").textContent = label;
   $("fn-dashboard-balance").textContent = money(summary.balance);
   $("fn-dashboard-income-total").textContent = money(summary.income);
+  $("fn-dashboard-pending-total").textContent = money(summary.pending);
   $("fn-dashboard-expense-total").textContent = money(summary.expenses);
 
   renderFinanceBreakdownRows($("fn-dashboard-income"), summary.incomeRows);
+  renderFinanceBreakdownRows($("fn-dashboard-pending"), summary.pendingRows);
   renderFinanceBreakdownRows($("fn-dashboard-expenses"), summary.expenseRows);
 }
 

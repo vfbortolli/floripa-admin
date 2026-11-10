@@ -31,6 +31,7 @@ export const state = {
   fnMembershipRate: null,
   fnTransactions: [],
   fnDaily: [],
+  fnDailyReceived: [],
   fnDailyAdjustments: [],
   
   // Histórico

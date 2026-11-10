@@ -141,7 +141,7 @@
           <label class="finance-year">Ano <input id="fn-dashboard-year" type="number" min="1900" max="9998" step="1"></label>
           <button id="fn-dashboard-load" class="secondary">Consultar</button>
         </div>
-        <p class="msg">Visão geral das receitas, despesas e do balanço da casa. Todos os usuários autorizados podem consultar; somente administradores podem alterar dados financeiros.</p>
+        <p class="msg">Receitas mostram valores recebidos; receitas avulsas são consideradas realizadas ao serem lançadas. Mensalidades e diárias pendentes aparecem separadamente em “A receber”. Todos os usuários autorizados podem consultar; somente administradores podem alterar dados financeiros.</p>
         <p id="fn-dashboard-msg" class="msg"></p>
         <div class="finance-dashboard-views" role="group" aria-label="Período do painel financeiro">
           <button id="fn-view-month" class="secondary" type="button" aria-pressed="true">Mês</button>
@@ -163,10 +163,17 @@
             <div class="finance-breakdown-grid">
               <section class="finance-breakdown income">
                 <div class="finance-breakdown-heading">
-                  <h4>Receitas</h4>
+                  <h4>Receitas recebidas</h4>
                   <strong id="fn-dashboard-income-total"></strong>
                 </div>
                 <div id="fn-dashboard-income"></div>
+              </section>
+              <section class="finance-breakdown pending">
+                <div class="finance-breakdown-heading">
+                  <h4>A receber</h4>
+                  <strong id="fn-dashboard-pending-total"></strong>
+                </div>
+                <div id="fn-dashboard-pending"></div>
               </section>
               <section class="finance-breakdown expense">
                 <div class="finance-breakdown-heading">
@@ -189,10 +196,17 @@
           <div class="finance-breakdown-grid">
             <section class="finance-breakdown income">
               <div class="finance-breakdown-heading">
-                <h4>Receitas</h4>
+                <h4>Receitas recebidas</h4>
                 <strong id="fn-dashboard-annual-income-total"></strong>
               </div>
               <div id="fn-dashboard-annual-income"></div>
+            </section>
+            <section class="finance-breakdown pending">
+              <div class="finance-breakdown-heading">
+                <h4>A receber</h4>
+                <strong id="fn-dashboard-annual-pending-total"></strong>
+              </div>
+              <div id="fn-dashboard-annual-pending"></div>
             </section>
             <section class="finance-breakdown expense">
               <div class="finance-breakdown-heading">
