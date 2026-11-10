@@ -54,6 +54,14 @@ export const cleanupUnlinkedPaymentProof = async (receipt) => {
   return [recordError, fileError].filter(Boolean).map((error) => error.message);
 };
 
+// Remove o registro (vínculos caem em cascata; o banco bloqueia se houver baixa) e depois o arquivo.
+export const deletePaymentProof = async (receipt) => {
+  const { error } = await db.from("payment_receipts").delete().eq("id", receipt.id);
+  if (error) return { error: error.message };
+  const { error: fileError } = await db.storage.from(PAYMENT_PROOFS_BUCKET).remove([receipt.object_path]);
+  return { error: fileError ? `Registro removido, mas o arquivo não: ${fileError.message}` : null };
+};
+
 export const openPaymentProof = async (receipt, messageId) => {
   const { say } = await import("./ui.js");
   const { $ } = await import("./dom.js");

@@ -2,7 +2,7 @@
 import { state, setState, updateState } from "../app-state.js";
 import { $ } from "./dom.js";
 import { show, say, canManageFinance } from "./ui.js";
-import { getDb, uploadPaymentProof, cleanupUnlinkedPaymentProof, openPaymentProof } from "./db.js";
+import { getDb, uploadPaymentProof, cleanupUnlinkedPaymentProof, openPaymentProof, deletePaymentProof } from "./db.js";
 import { setView, setActive } from "./ui.js";
 import { money, parseDate } from "./utils.js";
 
@@ -276,7 +276,19 @@ export function renderFinanceMemberships(data, period) {
         open.className = "secondary";
         open.textContent = receipt.original_name;
         open.onclick = () => openPaymentProof(receipt, "fn-msg");
-        proofList.append(open);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "secondary";
+        remove.textContent = "Excluir";
+        remove.setAttribute("aria-label", `Excluir comprovante ${receipt.original_name}`);
+        remove.onclick = async () => {
+          if (!confirm(`Excluir o comprovante "${receipt.original_name}"?`)) return;
+          remove.disabled = true;
+          const { error } = await deletePaymentProof(receipt);
+          await loadFinance();
+          if (error) say("fn-msg", error);
+        };
+        proofList.append(open, remove);
       }
       const proofInput = document.createElement("input");
       proofInput.type = "file";
@@ -361,11 +373,14 @@ export function renderFinanceMemberships(data, period) {
           return;
         }
         
-        const { error } = await db.from("finance_memberships").upsert({
-          family_id: family.id, period_month: period,
+        // Upsert dispara o trigger de INSERT com id novo (sem comprovante) e falha; atualiza pelo id.
+        const values = {
           expected_amount: expectedAmount, received_amount: receivedAmount,
           paid_at: receivedAmount > 0 ? inputs[1].value || null : null,
-        }, { onConflict: "family_id,period_month" });
+        };
+        const { error } = membershipId
+          ? await db.from("finance_memberships").update(values).eq("id", membershipId)
+          : await db.from("finance_memberships").insert({ family_id: family.id, period_month: period, ...values });
         if (error) {
           await loadFinance();
           say("fn-msg", `Comprovante(s) anexado(s), mas o recebimento não foi salvo: ${error.message}`);

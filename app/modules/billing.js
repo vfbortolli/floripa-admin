@@ -2,7 +2,7 @@ import { state, setState } from "../app-state.js";
 import { show, say, setView, setActive } from "./ui.js";
 import { money, fmtDate, brDate, nightsBetween, roomById, whatsappUrl, TYPES } from "./utils.js";
 import { $ } from "./dom.js";
-import { getDb, uploadPaymentProof, cleanupUnlinkedPaymentProof, openPaymentProof } from "./db.js";
+import { getDb, uploadPaymentProof, cleanupUnlinkedPaymentProof, openPaymentProof, deletePaymentProof } from "./db.js";
 
 export async function showBilling() {
   setState("current", null);
@@ -238,7 +238,19 @@ export function renderBilling() {
           button.className = "secondary";
           button.textContent = `Comprovante: ${receipt.original_name}`;
           button.onclick = () => openPaymentProof(receipt, "bl-msg");
-          receiptList.append(button);
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "secondary";
+          remove.textContent = "Excluir";
+          remove.setAttribute("aria-label", `Excluir comprovante ${receipt.original_name}`);
+          remove.onclick = async () => {
+            if (!confirm(`Excluir o comprovante "${receipt.original_name}"? Ele será removido de todas as cobranças vinculadas.`)) return;
+            remove.disabled = true;
+            const { error } = await deletePaymentProof(receipt);
+            await loadBilling();
+            if (error) say("bl-msg", error);
+          };
+          receiptList.append(button, remove);
         }
         card.append(receiptList);
       } else {
