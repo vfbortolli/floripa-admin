@@ -522,8 +522,8 @@ dialog::backdrop { background: rgba(16, 24, 40, .45); }
 #res-form { padding: 22px; }
 #res-form h2 { margin: 0 0 14px; font-size: 20px; }
 #res-form h3 { margin: 14px 0 6px; font-size: 14px; }
-#res-form label:not(.check) { display: block; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
-#res-form label:not(.check) input, #res-form label:not(.check) select { display: block; width: 100%; margin-top: 4px; color: var(--text); }
+#res-form label:not(.check):not(.block-toggle) { display: block; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+#res-form label:not(.check):not(.block-toggle) input, #res-form label:not(.check):not(.block-toggle) select { display: block; width: 100%; margin-top: 4px; color: var(--text); }
 .whatsapp-dialog-content { padding: 22px; }
 .whatsapp-dialog-content h2 { margin: 0 0 8px; font-size: 20px; }
 .whatsapp-dialog-content > p { margin: 0; color: var(--muted); }

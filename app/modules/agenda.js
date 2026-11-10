@@ -6,6 +6,7 @@ import { getDb, uploadPaymentProof, cleanupUnlinkedPaymentProof } from "./db.js"
 import { canEdit } from "./auth.js";
 
 const canApprove = (room) => !!room && room.kind === "personal" && (state.me.is_admin || canEdit(room));
+const isReservationFinished = (r) => !!r && fmtDate(new Date()) > r.check_out;
 const canManage = (r) => state.me.is_admin || state.myReservationIds.has(r.id);
 const autoConfirm = (room) => room.kind === "common" || state.me.is_admin || canEdit(room);
 const statusFor = (room, existing) =>
@@ -305,7 +306,7 @@ export function showReservationWhatsApp(targets, message, error) {
 
 export function openReservation(r, preset = {}) {
   setState("editing", r);
-  setState("readOnly", !!r && !canManage(r));
+  setState("readOnly", !!r && (!canManage(r) || isReservationFinished(r)));
   setState("removedIds", []);
   const isNew = !r;
   $("res-title").textContent = isNew ? "Nova reserva" : state.readOnly ? "Reserva" : "Editar reserva";
@@ -324,11 +325,13 @@ export function openReservation(r, preset = {}) {
     pending: "Solicitação pendente: não bloqueia o período até ser aprovada pelo responsável do quarto ou por um administrador.",
     rejected: "Solicitação recusada. Ao salvar, ela volta a ficar pendente.",
   };
-  const msg = r && notes[r.status] ? notes[r.status] : "";
+  const msg = r && isReservationFinished(r)
+    ? "Esta reserva já terminou e não pode mais ser alterada."
+    : r && notes[r.status] ? notes[r.status] : "";
   st.textContent = msg;
   show("r-status", !!msg);
-  show("r-approve", !!r && r.status === "pending" && canApprove(room0));
-  show("r-reject", !!r && r.status === "pending" && canApprove(room0));
+  show("r-approve", !!r && !isReservationFinished(r) && r.status === "pending" && canApprove(room0));
+  show("r-reject", !!r && !isReservationFinished(r) && r.status === "pending" && canApprove(room0));
   setState("formGuests", (r?.reservation_guests ?? []).map((g) => ({
     id: g.id, name: g.name, type: g.type, exempt: g.exempt, rate: chargeRate(g),
   })));
@@ -414,6 +417,7 @@ export function addGuest() {
 }
 
 export async function resolveReservation(approve) {
+  if (isReservationFinished(state.editing)) return say("r-msg", "Esta reserva já terminou e não pode mais ser alterada.");
   const db = getDb();
   const id = state.editing.id;
   let { error } = approve
@@ -453,11 +457,12 @@ export function setupAgendaListeners() {
   $("whatsapp-close").onclick = () => $("whatsapp-dialog").close();
 
   $("r-delete").onclick = async () => {
+    if (isReservationFinished(state.editing)) return say("r-msg", "Esta reserva já terminou e não pode mais ser alterada.");
     if (!confirm("Cancelar esta reserva?")) return;
     const { error: delError } = await db.from("reservations").delete().eq("id", state.editing.id);
-    if (error) return say("r-msg", error.code === "23503"
+    if (delError) return say("r-msg", delError.code === "23503"
       ? "Não é possível excluir esta reserva porque há um comprovante vinculado a uma diária. Remova o vínculo financeiro antes."
-      : error.message);
+      : delError.message);
     $("res-dialog").close();
     await loadAll();
   };
@@ -468,6 +473,7 @@ export function setupAgendaListeners() {
 
   $("res-form").onsubmit = async (e) => {
     e.preventDefault();
+    if (state.editing && isReservationFinished(state.editing)) return say("r-msg", "Esta reserva já terminou e não pode mais ser alterada.");
     if (state.readOnly) return;
     const block = $("r-block").checked;
     const check_in = $("r-in").value, check_out = $("r-out").value;
