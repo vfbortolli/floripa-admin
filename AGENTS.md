@@ -1,4 +1,4 @@
-# Casa de Praia – guia do projeto (para IAs e mantenedores)
+# Casa dos Paulistas – guia do projeto (para IAs e mantenedores)
 
 Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, agenda de diárias, valores e cobrança. Idioma da interface e do usuário: **português (pt-BR)**. Objetivo: custo zero de hospedagem.
 

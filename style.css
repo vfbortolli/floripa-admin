@@ -44,6 +44,8 @@ input:focus, select:focus, button:focus-visible {
   border-radius: 16px; box-shadow: 0 10px 30px rgba(16, 24, 40, .08); text-align: center;
 }
 .card h1 { margin: 0 0 4px; font-size: 24px; }
+.brand-icon { width: 1.35em; height: 1.35em; object-fit: contain; vertical-align: -0.22em; margin-right: .18em; }
+.card .brand-icon { width: 1.6em; height: 1.6em; vertical-align: -0.3em; }
 .card p { color: var(--muted); margin: 0 0 20px; }
 .card input { width: 100%; margin-bottom: 10px; }
 .card button { width: 100%; }
@@ -56,11 +58,16 @@ input:focus, select:focus, button:focus-visible {
 /* App */
 header {
   display: flex; justify-content: space-between; align-items: center; padding: 14px 24px;
-  background: linear-gradient(135deg, var(--primary-dark), var(--primary)); color: #fff;
-  box-shadow: 0 2px 8px rgba(16, 24, 40, .15);
+  background: #fff; color: #123b5d; border-bottom: 3px solid var(--primary);
+  box-shadow: 0 2px 8px rgba(18, 59, 93, .08);
 }
-header h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+header h1 { display: flex; align-items: center; gap: 10px; font-size: 18px; margin: 0; letter-spacing: .2px; }
+header .brand-icon {
+  width: 42px; height: 42px; padding: 3px; border-radius: 10px;
+  background: #e8f1f8; mix-blend-mode: multiply;
+}
 header > span { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+header button.link:hover { background: rgba(18, 59, 93, .08); }
 .layout { display: flex; gap: 24px; padding: 24px; max-width: 1100px; margin: 0 auto; align-items: flex-start; }
 nav {
   width: 220px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border);
