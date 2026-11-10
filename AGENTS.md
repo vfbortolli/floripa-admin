@@ -13,18 +13,36 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 ## Arquivos
 | Arquivo | Conteúdo |
 |---|---|
-| `index.html` | Estrutura. Views (`<main>`): `inventory`, `people`, `agenda`, `rates`, `billing`, `finance`, `history`. Diálogo `#res-dialog` (reserva). |
-| `app.js` | Toda a lógica do cliente (ver mapa abaixo). |
+| `index.html` | Estrutura. Views (`<main>`): `inventory`, `people`, `agenda`, `rates`, `billing`, `dashboard`, `finance`, `history`. Diálogos `#res-dialog` (reserva) e `#whatsapp-dialog`. Carrega `app/app.js` como módulo ES. |
 | `style.css` | Design (variáveis, componentes, calendário, `@media (max-width: 760px)` para celular). |
-| `config.js` | URL e chave publishable do Supabase. |
+| `config.js` | Expõe `window.APP_CONFIG` com `SUPABASE_URL` e `SUPABASE_ANON_KEY`. |
+| `app/app.js` | Entry point: `init()`, listeners de auth/login/logout/backup. **Este é o único arquivo JS de entrada**; não há mais `app.js` na raiz. |
+| `app/app-state.js` | Estado global compartilhado (`state`). Exporta `state`, `setState`, `updateState`. |
+| `app/modules/db.js` | Cria e expõe o cliente Supabase (`createDbClient`, `getDb`). Operações de comprovantes (`uploadPaymentProof`, `deletePaymentProof`, `openPaymentProof`, etc.). |
+| `app/modules/dom.js` | Helper `$(id)` para `document.getElementById`. |
+| `app/modules/ui.js` | `show`, `say`, `setView`, `setActive`, `canManageFinance`. |
+| `app/modules/utils.js` | Helpers puros: `fmtDate`, `parseDate`, `nightsBetween`, `brDate`, `money`, `personName`, `whatsappUrl`, `reservableRooms`, `roomById`, `TYPES`. |
+| `app/modules/auth.js` | `showLogin`, `canEdit`, `logout`. |
+| `app/modules/nav.js` | `renderNav()`: constrói a navegação lateral dinamicamente a partir de `state.spaces`. |
+| `app/modules/inventory.js` | `selectSpace`, `loadItems`, `renderItems`, `parseCsv`, `setupInventoryListeners`. |
+| `app/modules/people.js` | `showPeople`, `loadPeople`, `setupPeopleListeners`. Helpers de histórico: `hsText`, `hsValue`. |
+| `app/modules/rates.js` | `showRates`, `displayRates`, `setupRatesListeners`. |
+| `app/modules/history.js` | `showHistory`, `loadHistory`, `setupHistoryListeners`. |
+| `app/modules/agenda.js` | `showAgenda`, `renderRoomChips`, `loadMonth`, `loadPending`, `renderGantt`, `renderResList`, `renderPendingList`, `openReservation`, `resolveReservation`, `setupAgendaListeners`. |
+| `app/modules/billing.js` | `showBilling`, `loadBilling`, `renderBilling`, `setupBillingListeners`. |
+| `app/modules/finance.js` | `showFinance`, `showFinanceDashboard`, `loadFinance`, `renderFinanceDashboard`, `renderFinanceDetails`, `renderFinanceCategories`, `updateFinanceCategoryOptions`, `setupFinanceListeners`. |
+| `supabase/schema.sql` | Fase 1: tabelas, funções de permissão, policies, seed. |
+| `supabase/phase2a.sql` … `phase2e.sql` | Migrações incrementais, **rodadas manualmente no SQL Editor, em ordem**. Idempotentes. |
 | `supabase/phase2f.sql` | Restringe a leitura de e-mails e tarifas; executar após `phase2e.sql`. |
 | `supabase/phase2g.sql` | Cria tabelas, permissões e RPC do Financeiro; executar após `phase2f.sql`. |
 | `supabase/phase2h.sql` | Define o valor anual das mensalidades; executar após `phase2g.sql`. |
 | `supabase/phase2i.sql` … `phase2j.sql` | Ajustes de contabilização de diárias; `phase2k.sql` depende de `phase2j.sql`. |
 | `supabase/phase2k.sql` | Cria bucket privado e vínculos de comprovantes para mensalidades e diárias; executar após `phase2j.sql`. |
 | `supabase/phase2l.sql` | Libera leitura do Financeiro a usuários autorizados e mantém edição/comprovantes restritos a admins; executar após `phase2k.sql`. |
-| `supabase/schema.sql` | Fase 1: tabelas, funções de permissão, policies, seed. |
-| `supabase/phase2a.sql` … `phase2e.sql` | Migrações incrementais, **rodadas manualmente no SQL Editor, em ordem**. Idempotentes. |
+| `supabase/phase2m.sql` | Adiciona campo `phone` a `allowed_users`. |
+| `supabase/phase2o.sql` | RPC `get_reservation_whatsapp_targets` para contatos do responsável de uma reserva pendente. |
+| `supabase/phase2p.sql` | Permite descrição em branco em lançamentos de "Outras receitas e despesas". |
+| `supabase/phase2q.sql` | RPC `get_membership_whatsapp_targets` para lembretes de mensalidade. |
 | `quarto-bortolli.csv` | Inventário do Quarto Bortolli (34 itens, já importado). |
 | `README.md` | Configuração e restauração de backup. |
 
@@ -55,35 +73,105 @@ Sistema pequeno (≈10 usuários) para uma casa de praia familiar: inventário, 
 - **Sem e-mails/notificações:** o status é visto dentro do sistema (seção "Solicitações de quartos pessoais" e contador na Agenda).
 - Admins: gerenciam Pessoas (não podem remover nem rebaixar a si mesmos), Valores, Cobrança, Financeiro, Histórico e Backup. Todos os usuários autorizados podem consultar o Financeiro; apenas admins podem editar e acessar comprovantes.
 
-## Mapa do `app.js`
-- Globais (`let`): `me`, `spaces`, `families`, `people`, `rates`, `current`, `monthRes`, `pendingRes`, `agRoom`, `agMonth`, `blRows` etc.
-- `init()`: carrega sessão, `allowed_users`, spaces/families, RPCs `list_people`/`get_rates`; `renderNav()`; abre a Agenda. `onAuthStateChange` (fim do arquivo) só reinicia se o usuário mudou (evita recarga ao focar a aba).
-- `renderNav`, `setView`, `setActive`, `canEdit(space)`.
-- Inventário: `selectSpace`, `loadItems`, import CSV.
-- Pessoas: `showPeople`, `loadPeople`. Valores: `showRates`. Backup: botão `btn-backup` (RPC `export_backup`).
-- Agenda: `showAgenda`, `renderRoomChips` (um quarto por vez), `loadMonth`, `loadPending`, `renderGantt` (calendário mensal em grade; barras do meio do dia de entrada ao meio do dia de saída), `renderResList`, `renderPendingList`.
-- Reserva: `openReservation`, `refreshForm`, `addGuest`, submit de `#res-form` (insere/atualiza reserva e sincroniza guests; **não é transacional**), `resolveReservation` (aprovar/recusar).
-- Cobrança: `showBilling`, `loadBilling`, `renderBilling`, export CSV e vínculos de comprovantes em `payment_receipt_guest_charges`. Um arquivo pode quitar várias diárias selecionadas. Histórico: `showHistory`, `loadHistory`, `hsText`.
-- Financeiro: `showFinance`, `loadFinance`, `renderFinance`, detalhes mensais de mensalidades/diárias e gestão de lançamentos/categorias; vários comprovantes podem ser vinculados a uma mensalidade.
+## Arquitetura do cliente (módulos ES em `app/`)
+
+O `index.html` carrega `app/app.js` como `<script type="module">`. Não há build nem bundler; o navegador resolve os imports nativamente.
+
+### `app/app-state.js` — estado global
+Objeto `state` único compartilhado entre todos os módulos. Campos principais:
+- `me`: registro de `allowed_users` do usuário logado.
+- `spaces`, `families`, `people`, `rates`: dados carregados no `init()`.
+- `current`: espaço selecionado no inventário.
+- Agenda: `agMonth`, `agRoom`, `monthRes`, `pendingRes`, `myReservationIds`.
+- Cobrança: `blMonth`, `blRows`, `blSelected`, `blMembershipContacts`.
+- Financeiro: `fnYear`, `fnMonth`, `fnCategories`, `fnMemberships`, `fnMembershipReceipts`, `fnMembershipRate`, `fnTransactions`, `fnDaily`, `fnDailyAdjustments`, `fnEditingTransaction`.
+- Histórico: `hsRows`.
+- Formulário de reserva: `editing`, `formGuests`, `removedIds`, `readOnly`.
+
+Sempre usar `setState(key, value)` ou `updateState(patch)` para mutações; evitar atribuição direta em `state` fora do próprio módulo de estado.
+
+### `app/app.js` — entry point
+- `init()`: obtém sessão, valida e-mail em `allowed_users`, carrega `spaces`, `families`, `list_people`, `get_rates` em paralelo, chama `renderNav()` e abre a Agenda. Chama `setup*Listeners()` de cada módulo uma única vez.
+- `onAuthStateChange`: reinicia só se o usuário mudou (evita recarga ao focar a aba); `SIGNED_OUT` → `location.reload()`.
+- Listeners de `#btn-backup` (RPC `export_backup`), `#btn-google`, `#form-magic`, `#btn-logout`, `#btn-logout-denied`.
+
+### `app/modules/nav.js` — navegação
+`renderNav()` constrói a `<nav>` dinamicamente: grupos "Agenda", "Casa comunitária", "Quartos pessoais", "Financeiro" e (só admin) "Administração". Cada item de quarto chama `selectSpace`; cada item de view chama a função `show*` correspondente. O badge de pendências na Agenda é atualizado por `loadPending()` em `agenda.js`.
+
+### `app/modules/agenda.js` — agenda e reservas
+- `showAgenda`, `renderRoomChips`: seleciona quarto e renderiza chips com badges de pendências.
+- `loadMonth`, `renderGantt`: calendário mensal em grade; barras vão do meio do dia de check-in ao meio do dia de check-out.
+- `renderResList`: lista de reservas do mês do quarto selecionado.
+- `loadPending`, `renderPendingList`: seção "Solicitações de quartos pessoais" (status `pending`/`rejected` futuros).
+- `openReservation`, `refreshForm`, `addGuest`, submit de `#res-form`: cria/edita reserva e sincroniza `reservation_guests` (**não é transacional**).
+- `resolveReservation`: aprovar (RPC `approve_reservation`) ou recusar (RPC `reject_reservation`).
+- `setupAgendaListeners`: navegação de mês, chips, abertura de diálogo, botões de ação do formulário.
+- Após criar reserva pendente em quarto pessoal de outra família, exibe `#whatsapp-dialog` com link `wa.me` por responsável (RPC `get_reservation_whatsapp_targets`, via `phase2o.sql`).
+
+### `app/modules/billing.js` — cobrança
+- `loadBilling`: busca reservas confirmadas com `check_out` no mês, mensalidades e comprovantes. Monta `state.blRows` com diárias e mensalidades.
+- `renderBilling`: tabela de cobrança; seleção múltipla de diárias para vincular um comprovante; mensalidades com links WhatsApp para lembrete (RPC `get_membership_whatsapp_targets`, via `phase2q.sql`).
+- Export CSV das diárias do mês.
+
+### `app/modules/finance.js` — financeiro
+- `loadFinance`: carrega categorias, mensalidades, taxa anual, lançamentos, diárias calculadas (`get_finance_daily`) e ajustes em paralelo.
+- `renderFinanceDashboard`: painel anual (view `#dashboard`).
+- `renderFinanceDetails`: detalhamento mensal de mensalidades, diárias e lançamentos (view `#finance`).
+- `renderFinanceCategories`: CRUD de categorias (somente admins).
+- Comprovantes de mensalidade: vários por mensalidade; visualização via URL assinada (1 min).
+
+### `app/modules/people.js` — pessoas e helpers de histórico
+- `showPeople`, `loadPeople`, `setupPeopleListeners`: CRUD de `allowed_users`. Admin não pode remover nem rebaixar a si mesmo.
+- `hsText(r)`, `hsValue(field, v)`: formatam uma linha do `audit_log` em texto legível (usados também por `history.js`).
 
 ## Convenções e armadilhas
-- Execute a `phase2f.sql` após `phase2e.sql` antes de publicar a versão de `app.js` que usa as permissões de privacidade atualizadas.
-- Execute `phase2g.sql` após `phase2f.sql` antes de usar/publicar o módulo Financeiro.
-- Execute `phase2h.sql` após `phase2g.sql` antes de usar/publicar o padrão anual de mensalidades.
-- Execute `phase2k.sql` após `phase2j.sql` antes de publicar o envio de comprovantes e a baixa obrigatória com comprovante.
-- Execute `phase2l.sql` após `phase2k.sql` antes de publicar a visualização financeira para todos os usuários autorizados.
-- Datas como `YYYY-MM-DD`; usar `parseDate`/`fmtDate` (evitam bug de fuso). Valores em BRL via `money()`.
-- Texto vindo do banco entra com `textContent` (nunca `innerHTML`).
+
+### SQL — migrações
+- Execute as migrações em ordem antes de publicar o JS que dependa delas; nunca o contrário.
+- Ordem obrigatória: `schema.sql` → `phase2a`→…→`phase2e` → `phase2f` → `phase2g` → `phase2h` → `phase2i` → `phase2j` → `phase2k` → `phase2l`. As migrações `phase2m`, `phase2o`, `phase2p`, `phase2q` são independentes entre si mas todas dependem de `phase2g` ou posterior.
 - Mudou o banco? Criar novo `supabase/phaseX.sql` idempotente e avisar o usuário para rodá-lo; **não publicar JS que dependa de SQL ainda não executado sem avisar**.
-- Testes visuais: Playwright em Node com `supabase-js` interceptado e dados simulados (o navegador integrado do VS Code tem viewport minúsculo). Não há suíte de testes automatizados.
+
+### JS — módulos e estado
+- O entry point é **somente** `app/app.js`. Não criar nem recriar `app.js` na raiz do projeto.
+- Importar sempre por caminho relativo (`../app-state.js`, `./utils.js`). Não usar caminhos absolutos.
+- Estado compartilhado vive em `app/app-state.js`. Usar `setState(key, value)` para escrever; evitar `state.x = y` diretamente fora de `app-state.js`. O `rates.js` ainda faz `state.fnYear = year` — isso deve ser corrigido oportunisticamente nas próximas edições.
+- O cliente Supabase é criado uma vez em `createDbClient()` e acessado nos módulos via `getDb()`. Nunca criar um segundo `createClient` num módulo.
+- `getDb()` pode retornar `null` se chamado antes de `createDbClient()`. Isso só ocorreria se um módulo fosse importado antes do `init()`.
+
+### HTML/DOM
+- Texto vindo do banco entra com `textContent` (nunca `innerHTML`).
+- Datas como `YYYY-MM-DD`; usar `parseDate`/`fmtDate` de `utils.js` (evitam bug de fuso horário). Valores em BRL via `money()`.
 - `.layout` precisa de `align-items: stretch` para o conteúdo não alargar a página no celular.
-- Commits terminam com `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
+
+### Testes e validação
+- Não há suíte de testes automatizados. Validação é visual: `npx serve -l 8080 .` e testar no navegador.
+- Testes com Playwright em Node são possíveis com `supabase-js` interceptado e dados simulados, mas o navegador integrado do VS Code tem viewport minúsculo — preferir o navegador do sistema.
+
+### Commits
+- Terminam com `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
 
 ## Estado atual
-Os módulos existentes estão publicados. O Financeiro e os comprovantes dependem das migrações `phase2g.sql`–`phase2k.sql` aplicadas manualmente no Supabase antes da publicação/uso. A visualização financeira para todos os usuários autorizados depende também da `phase2l.sql`. A versão com comprovantes não deve ser publicada antes da execução da `phase2k.sql`; a nova experiência financeira não deve ser publicada antes da `phase2l.sql`. O fluxo de aprovação e os módulos de cobrança, backup e histórico foram verificados só visualmente com dados simulados, **sem teste com outras contas reais**.
+
+### Publicação e migrações
+Todos os módulos estão publicados. As funcionalidades ativas dependem das seguintes migrações já aplicadas no Supabase: `schema.sql` + `phase2a`–`phase2l` + `phase2m` + `phase2o` + `phase2p` + `phase2q`. O fluxo de aprovação e os módulos de cobrança, backup e histórico foram verificados só visualmente com dados simulados, **sem teste com outras contas reais**.
+
+### Arquitetura do cliente
+- ✅ **Modularização concluída**: `app.js` raiz (arquivo legado monolítico) foi removido. O código vive exclusivamente em `app/app.js` e `app/modules/*.js`.
+- ⚠️ **Dívidas técnicas conhecidas** (a corrigir oportunisticamente):
+  - `rates.js` ainda muta `state.fnYear` diretamente (`state.fnYear = year`) em vez de usar `setState`.
+  - `nav.js` importa todos os módulos de view diretamente, criando acoplamento forte. Ideal: receber um objeto de roteamento de `app.js`.
+  - `hsText` e `hsValue` vivem em `people.js` mas são usados por `history.js` — semânticamente pertencem a um módulo de auditoria separado.
+  - `agenda.js` (~24 KB) concentra renderização do Gantt, formulário de reserva e lista de pendências — candidato a ser dividido futuramente.
+  - `finance.js` (~28 KB) concentra painel, detalhamento e categorias — candidato a ser dividido futuramente.
 
 ## Pendências / ideias
 - Cadastrar responsáveis das outras famílias e demais admins (usuário ainda não tem os e-mails).
-- No Supabase: provedor Email ativo e Site URL/Redirect URLs (`https://vfbortolli.github.io/floripa-admin/`, `http://localhost:8080`); confirmar execução do keep-alive.
+- No Supabase: confirmar que provedor Email está ativo, Site URL e Redirect URLs configurados (`https://vfbortolli.github.io/floripa-admin/`, `http://localhost:8080`) e keep-alive funcionando.
 - Importar inventário dos outros espaços (se houver planilhas).
-- Ideias: aviso por e-mail ao responsável, PWA (instalar no celular), login com Google, lista de itens que precisam de reparo, botão de importar backup (hoje a restauração é por prompt no README).
+- Arquitetura — próximos passos sugeridos (em ordem de impacto/risco):
+  1. Corrigir mutações diretas em `state` (ex.: `rates.js`).
+  2. Extrair `hsText`/`hsValue`/`HS_TABLES` de `people.js` para `app/modules/audit.js`.
+  3. Desacoplar `nav.js` recebendo callbacks de roteamento em vez de importar as views.
+  4. Dividir `agenda.js` em `agenda/index.js`, `agenda/gantt.js`, `agenda/reservation-form.js`, `agenda/pending.js`.
+  5. Dividir `finance.js` em `finance/index.js`, `finance/dashboard.js`, `finance/details.js`.
+- Ideias de produto: aviso por e-mail ao responsável, PWA (instalar no celular), login com Google, lista de itens que precisam de reparo, botão de importar backup (hoje a restauração é por prompt no README).
