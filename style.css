@@ -240,6 +240,7 @@ button.person-toggle:focus-visible { outline-offset: -2px; }
 .finance-dashboard-detail { margin-top: 24px; scroll-margin-top: 16px; }
 .finance-dashboard-detail-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .finance-dashboard-detail-heading .sub { margin: 0; text-transform: capitalize; }
+.finance-dashboard-detail-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .finance-dashboard-balance { display: grid; gap: 2px; text-align: right; color: var(--muted); font-size: 12px; }
 .finance-dashboard-balance strong { color: var(--primary-dark); font-size: 18px; }
 .finance-breakdown-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }

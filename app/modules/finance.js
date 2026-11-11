@@ -297,6 +297,7 @@ export function renderFinanceDashboardDetails() {
   const data = fnMonthlyData(state.fnMonth);
   const summary = fnFinanceSummary(data);
   const label = new Date(state.fnYear, state.fnMonth, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  say("fn-dashboard-share-msg", "");
   $("fn-dashboard-month-label").textContent = label;
   $("fn-dashboard-balance").textContent = money(summary.balance);
   $("fn-dashboard-income-total").textContent = money(summary.income);
@@ -306,6 +307,68 @@ export function renderFinanceDashboardDetails() {
   renderFinanceBreakdownRows($("fn-dashboard-income"), summary.incomeRows);
   renderFinanceBreakdownRows($("fn-dashboard-pending"), summary.pendingRows);
   renderFinanceBreakdownRows($("fn-dashboard-expenses"), summary.expenseRows);
+}
+
+function downloadFinanceImage(blob) {
+  const month = `${state.fnYear}-${String(state.fnMonth + 1).padStart(2, "0")}`;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `balanco-${month}.png`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copyFinanceImage() {
+  const button = $("fn-dashboard-copy");
+  button.disabled = true;
+  say("fn-dashboard-share-msg", "Gerando imagem...");
+
+  let blob;
+  try {
+    if (typeof window.html2canvas !== "function") {
+      throw new Error("O serviço de captura de imagem não está disponível.");
+    }
+    const scale = 2;
+    const capturedCanvas = await window.html2canvas($("fn-dashboard-detail"), {
+      backgroundColor: "#fff",
+      scale,
+      logging: false,
+    });
+    const padding = 24 * scale;
+    const canvas = document.createElement("canvas");
+    canvas.width = capturedCanvas.width + padding * 2;
+    canvas.height = capturedCanvas.height + padding * 2;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível preparar a imagem.");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(capturedCanvas, padding, padding);
+    blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error("O navegador não conseguiu gerar o arquivo PNG.");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    say("fn-dashboard-share-msg", `Não foi possível gerar a imagem: ${detail}`);
+    button.disabled = false;
+    return;
+  }
+
+  try {
+    if (!window.isSecureContext || !window.navigator.clipboard?.write || !window.ClipboardItem) {
+      throw new Error("Este navegador não permite copiar imagens para a área de transferência.");
+    }
+    await window.navigator.clipboard.write([new window.ClipboardItem({ "image/png": blob })]);
+    say("fn-dashboard-share-msg", "Imagem copiada. Agora é só colar na conversa.");
+  } catch {
+    try {
+      downloadFinanceImage(blob);
+      say("fn-dashboard-share-msg", "Não foi possível copiar a imagem; o PNG foi baixado para você.");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      say("fn-dashboard-share-msg", `Não foi possível copiar nem baixar a imagem: ${detail}`);
+    }
+  }
+  button.disabled = false;
 }
 
 function renderFinanceBreakdownRows(target, rows) {
@@ -923,6 +986,8 @@ export function setupFinanceListeners() {
     $("fn-view-month").setAttribute("aria-pressed", "false");
     $("fn-view-year").setAttribute("aria-pressed", "true");
   };
+
+  $("fn-dashboard-copy").onclick = copyFinanceImage;
 
   $("fn-load").onclick = async () => {
     const year = Number($("fn-year").value);

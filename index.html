@@ -175,9 +175,12 @@
           <section id="fn-dashboard-detail" class="finance-dashboard-detail" aria-live="polite">
             <div class="finance-dashboard-detail-heading">
               <h3 class="sub">Detalhes de <span id="fn-dashboard-month-label"></span></h3>
-              <div class="finance-dashboard-balance">
-                <span>Balanço do mês</span>
-                <strong id="fn-dashboard-balance"></strong>
+              <div class="finance-dashboard-detail-actions">
+                <div class="finance-dashboard-balance">
+                  <span>Balanço do mês</span>
+                  <strong id="fn-dashboard-balance"></strong>
+                </div>
+                <button id="fn-dashboard-copy" class="secondary" type="button" data-html2canvas-ignore>Copiar imagem</button>
               </div>
             </div>
             <div class="finance-breakdown-grid">
@@ -204,6 +207,7 @@
               </section>
             </div>
           </section>
+          <p id="fn-dashboard-share-msg" class="msg" role="status" aria-live="polite"></p>
         </div>
         <section id="fn-year-view" class="finance-dashboard-detail hidden" aria-live="polite">
           <div class="finance-dashboard-detail-heading">
@@ -451,6 +455,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="document.write('<script src=&quot;https://unpkg.com/@supabase/supabase-js@2&quot;><\/script>')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" onerror="document.write('<script src=&quot;https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js&quot;><\/script>')"></script>
   <script src="config.js"></script>
   <script type="module" src="app/app.js"></script>
 </body>
